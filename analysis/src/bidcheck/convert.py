@@ -155,8 +155,14 @@ class Run:
         if not path.is_file():
             raise Unreadable("events.jsonl is missing")
         columns = {"v": "BIGINT", "type": "VARCHAR"}
+        # A name can mean different types on different events (`bidder` is a number on a bid and
+        # an alias on a stream event). Those are read as JSON and typed per event below.
+        mixed = set()
         for _, fields, _ in EVENTS.values():
-            columns.update(fields)
+            for name, kind in fields.items():
+                if columns.setdefault(name, kind) != kind:
+                    mixed.add(name)
+        columns.update(dict.fromkeys(mixed, "JSON"))
         # A line that doesn't parse stops the load: ignore_errors stays off.
         self.db.read_json(str(path), format="newline_delimited", columns=columns).create("events")
 
@@ -167,7 +173,10 @@ class Run:
             raise Unreadable(f"events.jsonl: {bad} lines lack a type or aren't version {SCHEMA_VERSION}")
         # Types this code doesn't know stay in `events` and are otherwise ignored.
         for kind, (table, fields, required) in EVENTS.items():
-            names = ", ".join(f'"{name}"' for name in fields)
+            names = ", ".join(
+                f"""CAST("{name}" ->> '$' AS {sql_type}) AS "{name}\"""" if name in mixed else f'"{name}"'
+                for name, sql_type in fields.items()
+            )
             self.db.execute(f"CREATE TABLE {table} AS SELECT {names} FROM events WHERE type = '{kind}'")
             missing = " OR ".join(f'"{name}" IS NULL' for name in required)
             bad = self.db.execute(f"SELECT count(*) FROM {table} WHERE {missing}").fetchone()[0]

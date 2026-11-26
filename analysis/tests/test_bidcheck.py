@@ -19,6 +19,10 @@ def test_a_clean_run_passes_and_is_converted(tmp_path):
     assert json.loads((tmp_path / "checks.json").read_text())["passed"]
     got = duckdb.sql(f"SELECT seq, amount FROM '{tmp_path}/parquet/bids.parquet' ORDER BY seq").fetchall()
     assert got == [(0, 1000), (1, 1100), (2, 1000), (3, 1100)]
+    # `bidder` is a number on a bid and a name on a stream event: each file keeps its own type.
+    for table, kind in [("bids", "BIGINT"), ("stream", "VARCHAR")]:
+        types = duckdb.sql(f"SELECT typeof(bidder) FROM '{tmp_path}/parquet/{table}.parquet' LIMIT 1")
+        assert types.fetchall() == [(kind,)]
     # A kind with no lines still has a typed file.
     assert duckdb.sql(f"SELECT why FROM '{tmp_path}/parquet/skipped.parquet'").fetchall() == []
 
