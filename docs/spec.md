@@ -1,4 +1,4 @@
-# bid-storm: spec (draft)
+# bid-storm: spec
 
 ## 1. Goal
 Record a bid storm in enough detail to show that many bids land at once, they get one agreed order, and none counts without a hold. Publish the recordings as a data-deep static site.
@@ -11,14 +11,14 @@ generator (Go) ──HTTP──▶ target (Holdfast) ──▶ recording proxy (
                           │
                  analysis (Python, DuckDB) ──▶ Parquet ──▶ site (TypeScript, D3, DuckDB-WASM)
 ```
-A small per-target adapter covers what the contract lacks: creating an auction, and running the target's own checker.
+A small per-target adapter covers what the contract lacks: creating an auction, and running the target's own checker. Holdfast has no endpoint for creating auctions, so its adapter runs Holdfast's own `seed-e2e.ts` from a local checkout, as `load/run.sh` does. That fixes the starting price and increment.
 
 ## 3. Recorded data
-- **Generator:** intended send, actual send, reply, status, bid id, outcome and reason, polls after `202`, retried keys.
+- **Generator:** intended send, actual send, reply, status, bid id, outcome and reason, polls after `202`, retried keys, and the price each bid was based on. One background reader refreshes that price, so no read delays a send. Format: `recording-format.md`.
 - **Proxy:** each authorize, cancel and capture: bid id, start, end, result.
 - **Subscribers (several):** accepted bids and the close, with `version` and arrival time.
 - **End of run:** the fake's `/audit` and the target checker's verdict.
-- **Manifest:** seed, rate, fake settings, target commit, instance count, machine, generator version.
+- **Manifest:** seed, rate, fake settings, target commit, instances, machine, generator version. The fake doesn't report its settings, so they are what the operator declares. The commit is the checkout's, assumed to be what is running. Instances are those seen answering.
 
 ## 4. What the data can claim
 - **Many at once:** measured arrival times.
@@ -28,7 +28,7 @@ A small per-target adapter covers what the contract lacks: creating an auction, 
 - **Replay:** the site replays a recording exactly. Re-sending a schedule repeats inputs, not outcomes (timing differs and the fake's faults aren't seeded).
 
 ## 5. Honest measurement
-Sends follow the schedule whether or not replies have returned, and latency counts from the intended send. A run where the generator fell behind is invalid. Repeat and show spread. One machine runs everything, and the site says so. The proxy's cost is measured by running with and without it.
+Sends follow the schedule whether or not replies have returned, and latency counts from the intended send. A run where the generator fell behind is invalid: by default, any send more than 50 ms late, or any send skipped because too many were still waiting for a reply. Repeat and show spread. One machine runs everything, and the site says so. The proxy's cost is measured by running with and without it.
 
 ## 6. Views
 Price staircase with rejected bids beneath; race lanes; latency heatmap and per-bid waterfall; rule-check strip; stream agreement; hold ledger; sweep surfaces; fault view.
@@ -56,5 +56,5 @@ In 2a, check Cloudflare Pages limits (25 MiB per file on the free plan when last
 
 ## 9. Open questions
 1. Proxy in Go (proposed, ADR 0003) or Python? Dan, before slice 1b.
-2. How does the adapter create auctions without changing the target? Holdfast has a seed script and no endpoint. Slice 1a.
+2. Settled in slice 1a: the adapter runs the target's own seed script (§2).
 3. Which recordings are small and interesting enough to commit? Slice 2a.
