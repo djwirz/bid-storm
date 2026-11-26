@@ -1,0 +1,21 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+*.log
+# Go
+/bin/
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+# Site
+node_modules/
+site/dist/
+# Recordings: only curated ones are committed
+/runs/*
+!/runs/curated/
