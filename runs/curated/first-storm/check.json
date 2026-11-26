@@ -1,0 +1,17 @@
+{
+  "v": 2,
+  "auction_id": "a4138c47-63c3-45fc-991d-21d7e163e1b6",
+  "exit_code": 0,
+  "quiet": true,
+  "status": "settled",
+  "bids_accepted": 38,
+  "lost_race": 229,
+  "rejected": 171,
+  "won": 1,
+  "holds": 267,
+  "holds_released": 266,
+  "holds_captured": 1,
+  "holds_live": 0,
+  "outbox_failed": 0,
+  "violations": []
+}

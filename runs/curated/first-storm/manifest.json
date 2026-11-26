@@ -1,0 +1,102 @@
+{
+  "schema_version": 2,
+  "run_id": "20261126T223435.027Z-s1",
+  "started_us": 1795732476005766,
+  "ended_us": 1795732513236888,
+  "complete": true,
+  "valid": true,
+  "invalid_reasons": [],
+  "schedule": {
+    "seed": 1,
+    "rate_per_second": 50,
+    "duration_us": 10000000,
+    "bidders": 30,
+    "retry_rate": 0.1,
+    "conflict_rate": 0.3
+  },
+  "schedule_from": "generated",
+  "settings": {
+    "auction_seconds": 8,
+    "lag_limit_us": 50000,
+    "max_in_flight": 2000,
+    "price_every_us": 100000,
+    "poll_every_us": 500000,
+    "poll_timeout_us": 60000000,
+    "request_timeout_us": 30000000,
+    "proxy": true,
+    "subscribers": 4,
+    "drain_timeout_us": 90000000
+  },
+  "target": {
+    "name": "holdfast",
+    "url": "http://localhost:3000",
+    "auction_id": "a4138c47-63c3-45fc-991d-21d7e163e1b6",
+    "commit": "427109f8813b6f72a7bb0b8bd42b6033bf250756",
+    "commit_dirty": false,
+    "fake_settings_declared": {
+      "FAKE_CANCEL_FAULT_RATE": "0.1",
+      "FAKE_DECLINE_RATE": "0.03",
+      "FAKE_LATENCY_MS": "150-500",
+      "FAKE_LOST_RESPONSE_RATE": "0.03",
+      "FAKE_SERVER_ERROR_EVERY": "25"
+    },
+    "instances_seen": [
+      "3001",
+      "3002"
+    ]
+  },
+  "machine": {
+    "os": "darwin",
+    "arch": "amd64",
+    "cpus": 8
+  },
+  "generator": {
+    "go_version": "go1.27.4",
+    "revision": "a01053303f5688b022de9c200a7958dce26f3683",
+    "dirty": false
+  },
+  "results": {
+    "scheduled": 483,
+    "sent": 483,
+    "skipped": 0,
+    "send_lag_max_us": 21912,
+    "send_lag_p99_us": 2321,
+    "http_statuses": {
+      "201": 459,
+      "202": 9,
+      "422": 15
+    },
+    "transport_errors": {},
+    "bids_by_last_status": {
+      "accepted": 38,
+      "lost_race:below_minimum": 217,
+      "lost_race:ended": 12,
+      "rejected:below_minimum": 61,
+      "rejected:card_declined": 8,
+      "rejected:ended": 97,
+      "rejected:processing_error": 5
+    },
+    "accepted_bids": 38,
+    "polls": 511,
+    "unresolved_bids": 0,
+    "price_read_errors": 0,
+    "hold_calls": {
+      "authorize": 296,
+      "cancel": 288,
+      "capture": 1
+    },
+    "stream_events": 160,
+    "stream_reconnects": 0,
+    "drain_us": 100286,
+    "drain_waiting": [],
+    "timeline": {
+      "accepted_without_hold": 0,
+      "accepted_unannounced": 0,
+      "announced_unclaimed": 0
+    }
+  },
+  "end_of_run": {
+    "audit_saved": true,
+    "check_saved": true
+  }
+}

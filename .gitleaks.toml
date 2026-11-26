@@ -1,6 +1,18 @@
-# gitleaks config: the default rules. Add narrow allowlist entries (one exact finding
-# each) only for published test values, with the source in a comment.
+# gitleaks config: the default rules. Add narrow allowlist entries only for values known not
+# to be secrets, as one exact finding each or one exact shape in one place, with the source
+# in a comment.
 title = "bid-storm"
 
 [extend]
 useDefault = true
+
+# Published recordings name each request's idempotency key, which the generic-api-key rule
+# takes for a key. They are made up by the run: a bid id (what Holdfast sends the fake), or
+# the first 8 characters of the auction id and a sequence number (what the generator sends).
+[[allowlists]]
+description = "idempotency keys in published recordings"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^runs/curated/[^/]+/events\.jsonl$''']
+regexTarget = "match"
+regexes = ['''^idempotency_key":"([0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}|[0-9a-f]{8}-[0-9]+)"?$''']

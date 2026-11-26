@@ -16,6 +16,9 @@ __pycache__/
 # Site
 node_modules/
 site/dist/
+site/public/data/
+site/test-results/
+site/playwright-report/
 # Recordings: only curated ones are committed
 /runs/*
 !/runs/curated/

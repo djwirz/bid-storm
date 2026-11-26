@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="One recorded storm of simultaneous auction bids: one agreed order, and none counted without a card hold."
+    />
+    <title>bid-storm: anatomy of one storm</title>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Anatomy of one bid storm</h1>
+        <p id="summary">Loading the recording…</p>
+      </header>
+
+      <section aria-labelledby="checks-title">
+        <h2 id="checks-title">What was checked</h2>
+        <ul id="checks" class="checks"></ul>
+      </section>
+
+      <section aria-labelledby="stairs-title">
+        <h2 id="stairs-title">The price, and everything that didn’t move it</h2>
+        <p class="note">
+          Each step is an accepted bid, placed when the first subscriber heard of it. Every other mark is a bid
+          that did not count, placed when it was sent, at the amount it offered. A mark above the line can be a
+          bid that lost to one still being held. A square before the shaded part is a bid still undecided, or just
+          arrived, when the auction’s time ran out: some had lost the answer to their card hold, and the close is
+          announced a little after the end.
+        </p>
+        <div class="controls">
+          <button type="button" id="previous">← Previous accepted bid</button>
+          <button type="button" id="next">Next accepted bid →</button>
+          <output id="selected" aria-live="polite"></output>
+        </div>
+        <ul id="legend" class="legend"></ul>
+        <div id="staircase" class="chart"></div>
+        <p id="tooltip" class="tooltip" hidden></p>
+      </section>
+
+      <section aria-labelledby="lanes-title">
+        <h2 id="lanes-title">Race lanes: what was in flight around it</h2>
+        <p class="note">
+          One lane per bid that was waiting for its reply while the selected one was being decided. The thick
+          bar is the card hold as the recording proxy saw it. The vertical line is when the first subscriber
+          heard the selected bid: its hold ends to the left. A bid can be held and still lose; its hold is then
+          released.
+        </p>
+        <ul id="lane-legend" class="legend"></ul>
+        <div id="lanes" class="chart scroll"></div>
+        <details>
+          <summary>These lanes as a table</summary>
+          <div class="scroll" id="lane-table"></div>
+        </details>
+      </section>
+
+      <section aria-labelledby="agree-title">
+        <h2 id="agree-title">Did every subscriber hear the same thing?</h2>
+        <p id="agreement-words"></p>
+        <p class="note">
+          Each square is one subscriber hearing one version. Darker means later after the first subscriber to
+          hear that version.
+        </p>
+        <div id="agreement" class="chart scroll"></div>
+      </section>
+
+      <section aria-labelledby="table-title">
+        <h2 id="table-title">Every accepted bid</h2>
+        <details>
+          <summary>Show the table</summary>
+          <div class="scroll" id="accepted-table"></div>
+        </details>
+      </section>
+
+      <section aria-labelledby="limits-title">
+        <h2 id="limits-title">What one storm can’t show</h2>
+        <ul id="limits"></ul>
+        <p>
+          Code, recording and method: <a href="https://github.com/djwirz/bid-storm">github.com/djwirz/bid-storm</a>.
+          Synthetic users and auctions only.
+        </p>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
