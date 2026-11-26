@@ -1,9 +1,6 @@
 package record
 
 import (
-	"encoding/json"
-	"os"
-
 	"github.com/djwirz/bid-storm/internal/schedule"
 )
 
@@ -26,6 +23,14 @@ type Manifest struct {
 	Machine        Machine         `json:"machine"`
 	Generator      Generator       `json:"generator"`
 	Results        Results         `json:"results"`
+	// EndOfRun says which evidence files were saved. It has no bearing on Complete or Valid.
+	EndOfRun EndOfRun `json:"end_of_run"`
+}
+
+// EndOfRun is which of the files described in evidence.go this run has.
+type EndOfRun struct {
+	AuditSaved bool `json:"audit_saved"` // audit.json
+	CheckSaved bool `json:"check_saved"` // check.json
 }
 
 // Settings are the runner's limits and intervals.
@@ -104,9 +109,5 @@ type Timeline struct {
 
 // Save writes the manifest, replacing any earlier one.
 func (m Manifest) Save(path string) error {
-	b, err := json.MarshalIndent(m, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, append(b, '\n'), 0o644)
+	return SaveJSON(path, m)
 }

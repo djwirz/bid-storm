@@ -8,9 +8,11 @@ import (
 	"net"
 	"net/url"
 	"time"
+
+	"github.com/djwirz/bid-storm/internal/record"
 )
 
-// Adapter covers what differs per target (spec §2). Its checker joins in slice 1c.
+// Adapter covers what differs per target (spec §2).
 type Adapter interface {
 	Name() string
 	// Preflight returns an error unless the target is safe to storm.
@@ -21,6 +23,9 @@ type Adapter interface {
 	Revision(ctx context.Context) (commit string, dirty bool, err error)
 	// InstanceHeader names the reply header identifying the instance that answered, or "".
 	InstanceHeader() string
+	// Check runs the target's own checker on an auction, against its database and the fake.
+	// Violations are part of the verdict; an error means there is no verdict.
+	Check(ctx context.Context, auctionID, fakeURL string) (record.Check, error)
 }
 
 // CheckLoopback returns an error unless rawURL points at this machine. Version one loads

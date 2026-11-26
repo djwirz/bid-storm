@@ -107,8 +107,7 @@ func (a *Adapter) CreateAuction(ctx context.Context, title string, length time.D
 	seconds := strconv.Itoa(int(math.Ceil(length.Seconds())))
 	cmd := exec.CommandContext(ctx, a.node, "src/seed-e2e.ts", seconds, title)
 	cmd.Dir = filepath.Join(a.checkout, "server")
-	// Only what it needs: no env file is read, so no key from Holdfast's settings is in play.
-	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME"), "DATABASE_URL=" + a.databaseURL}
+	cmd.Env = a.scriptEnv()
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
@@ -116,6 +115,12 @@ func (a *Adapter) CreateAuction(ctx context.Context, title string, length time.D
 		return "", fmt.Errorf("seed-e2e.ts failed (Holdfast needs Node 26): %w\n%s", err, stderr.String())
 	}
 	return parseSeedOutput(out)
+}
+
+// scriptEnv is only what Holdfast's scripts need: no env file is read, so no key from its
+// settings is in play.
+func (a *Adapter) scriptEnv() []string {
+	return []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME"), "DATABASE_URL=" + a.databaseURL}
 }
 
 // parseSeedOutput reads the id from the script's last line.
