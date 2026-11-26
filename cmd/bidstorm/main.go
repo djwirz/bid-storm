@@ -377,7 +377,7 @@ func startProxy(listen, fakeURL string) (*proxy.Proxy, *http.Server, error) {
 		return nil, nil, fmt.Errorf("recording proxy: %w", err)
 	}
 	server := &http.Server{Handler: p, ReadHeaderTimeout: 5 * time.Second}
-	go server.Serve(l) // returns when the server is shut down
+	go func() { _ = server.Serve(l) }() // returns when the server is shut down
 	return p, server, nil
 }
 

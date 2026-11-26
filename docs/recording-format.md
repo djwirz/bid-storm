@@ -86,6 +86,7 @@ Written when the run starts and again when it ends.
 | `schema_version`, `run_id`, `started_us`, `ended_us` | |
 | `complete` | The whole schedule ran, the close reached every subscriber, every hold seen was settled and the events were saved |
 | `valid`, `invalid_reasons` | Whether the recording can be trusted: the generator kept up (spec §5) and no accepted bid is missing a stage. Not a verdict on the target |
+| `end_of_run` | `audit_saved`, `check_saved`. No bearing on `complete` or `valid` |
 | `schedule`, `schedule_from` | The schedule's `params`; `generated` or `file` |
 | `settings` | Auction length, lag limit, in-flight cap, price, poll and timeout intervals, whether the proxy ran, subscriber count, drain limit |
 | `target` | Name, URL, auction id, checkout commit and whether it was dirty, declared fake settings, instances seen |
@@ -95,8 +96,33 @@ Written when the run starts and again when it ends.
 
 `invalid_reasons` on a recording whose generator was killed reads "the run did not finish".
 
+## `audit.json`
+The Stripe fake's own record of the run's auction, asked of the fake directly once the target's checker has finished: `v`, `auction_id`, `fetched_us` and `intents`, each with `intent_id`, `bid_id`, `amount`, `amount_capturable` and `status` (`requires_capture`, `canceled` or `succeeded`). Other auctions' intents are left out.
+
+## `check.json`
+The verdict of the target's own checker (Holdfast: `server/src/check-invariants.ts`): `v`, `auction_id`, `exit_code` (0 means it passed), `quiet` (the target settled in time; if not, it checked no invariants), `status`, the counts `bids_accepted`, `lost_race`, `rejected`, `won`, `holds`, `holds_released`, `holds_captured`, `holds_live`, `outbox_failed`, and `violations` (`invariant`, `bid_id`, `message`, the checker's own sentence, clipped). Its console output is never saved.
+
+Either file is absent if the run was stopped early or it couldn't be had. Both were added within version 2.
+
+## Conversion and checks
+`make check` (`bidcheck <run>`) writes `parquet/`: `bids`, `polls`, `skipped`, `holds`, `stream`, `stream_conns`, `schedule` and `audit`, with the fields above as columns (without `v` and `type`) and times still integer microseconds. The manifest, `check.json` and `checks.json` stay JSON. The converter refuses a line that doesn't parse, a value of the wrong type, a missing identifier or time, and any other schema version. Unknown fields and event types are ignored.
+
+It then runs these, writes the results to `checks.json`, and exits 0 if all pass, 1 if one fails, 2 if the folder can't be read:
+
+| Check | Passes when |
+|---|---|
+| `usable` | The run is complete and valid, holds were recorded, at least two subscribers listened and a bid was accepted |
+| `nothing_lost` | Line counts match what the manifest counted |
+| `timelines` | Every scheduled `seq` was sent or skipped exactly once, no bid is left pending and times are in order |
+| `keys` | An idempotency key made at most one bid; a bid has one key and one amount. A retry with a changed amount need not have been refused (above) |
+| `hold_first` | Every accepted bid has a successful authorize for its amount that finished before any subscriber heard of it |
+| `amounts` | Accepted amounts are unique, and accepted bids and announcements match one for one at every subscriber |
+| `streams` | Subscribers heard the same accepted and close events, in the same order, with the same fields (snapshots aside). Versions and amounts increase; versions need not be contiguous. One close, last |
+| `audit` | The fake holds exactly one intent per accepted bid and no more than one per bid; only the winner's is still held or captured; it agrees with what the proxy saw |
+| `target_verdict` | The target's checker passed, and counts as many accepted bids as the recording |
+
 ## Not recorded
-Cookies, session tokens, headers, raw bodies, error message text, hostnames, user names and file paths. The price reader's requests (counted only if they fail) and sign-ins. The proxy never reads `userId`, and passes other requests to the fake (such as `/audit`) without recording them. The fake's `/audit` and the target's own checker come with slice 1c.
+Cookies, session tokens, headers, raw bodies, error message text, hostnames, user names and file paths. The price reader's requests (counted only if they fail) and sign-ins. The proxy never reads `userId`, and passes other requests to the fake without recording them.
 
 ## Version 1
 Slice 1a wrote version 1. Its `bid`, `poll` and `skipped` lines are the same apart from `v`, and it has no `hold`, `stream` or `stream_conn` lines. Version 2 raised the number because the manifest's `complete` and `valid` now mean more: in version 1 they said nothing about the close, holds or announcements. The `schedule.json` format has its own version, still 1.
