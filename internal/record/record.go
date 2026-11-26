@@ -14,7 +14,7 @@ import (
 )
 
 // SchemaVersion is the "v" on every event and the manifest's schema_version.
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 // Event types.
 const (

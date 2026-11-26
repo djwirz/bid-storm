@@ -1,4 +1,4 @@
-# Recording format (schema version 1)
+# Recording format (schema version 2)
 
 A run is a folder, `runs/<UTC time>-s<seed>/`. The rules for changing this format are in [ADR 0007](adr/0007-event-schema.md). Times are integer Unix microseconds. A value that doesn't apply is `null`.
 
@@ -98,4 +98,5 @@ Written when the run starts and again when it ends.
 ## Not recorded
 Cookies, session tokens, headers, raw bodies, error message text, hostnames, user names and file paths. The price reader's requests (counted only if they fail) and sign-ins. The proxy never reads `userId`, and passes other requests to the fake (such as `/audit`) without recording them. The fake's `/audit` and the target's own checker come with slice 1c.
 
-Recordings made before slice 1b have no `hold`, `stream` or `stream_conn` lines and fewer manifest fields (all additions within version 1).
+## Version 1
+Slice 1a wrote version 1. Its `bid`, `poll` and `skipped` lines are the same apart from `v`, and it has no `hold`, `stream` or `stream_conn` lines. Version 2 raised the number because the manifest's `complete` and `valid` now mean more: in version 1 they said nothing about the close, holds or announcements. The `schedule.json` format has its own version, still 1.
