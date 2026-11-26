@@ -47,6 +47,8 @@ One JSON object per line, in the order exchanges **finished**. Sort by a time or
 | `error_code` | The `error` field of an error reply |
 | `transport_error` | `timeout`, `canceled`, `connection_refused`, `connection_reset`, `connection_closed`, `bad_response` or `other` |
 
+`change_amount` in the schedule is what was intended, not what must happen. Under load a retry can reach the target before its original, or its original can have been skipped. The retry then takes the key (`201`), and whichever send with a different amount arrives later gets the `422`.
+
 A `201` can carry a `rejected` or `lost_race` bid. A retried key returns the original bid as it is now, so count distinct `bid_id`s, not lines.
 
 ## `manifest.json`
