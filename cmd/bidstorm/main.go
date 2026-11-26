@@ -277,7 +277,6 @@ func run(ctx context.Context, args []string) error {
 	// Everything that writes events stops before the file closes.
 	seen := subscribers.Stop()
 	var held map[string]bool
-	results.HoldCalls = nil
 	if holds != nil {
 		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
