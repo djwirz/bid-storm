@@ -6,9 +6,9 @@ The question the data should answer on sight: many bids land at once, they get o
 
 ![Price staircase of one recorded storm: accepted bids climb in steps, with the bids that did not count marked around them.](docs/img/staircase.png)
 
-One recorded storm on one laptop, against a local Holdfast and its payment fake.
+One recorded storm on one laptop, against a local Holdfast and its payment fake. Dig into it at [bid-storm.pages.dev](https://bid-storm.pages.dev).
 
-**Status:** slice 2a. A storm against a local Holdfast is recorded end to end, converted, checked, and shown on a static page built from one published recording. CI tests it all and deploys the page from `main` once Cloudflare is set up. Next is latency forensics. Design: [docs/spec.md](docs/spec.md) and [docs/adr/](docs/adr/). Synthetic users and auctions only, against local deployments.
+**Status:** slice 2a. A storm against a local Holdfast is recorded end to end, converted, checked, and shown on a static page built from one published recording. CI tests it all and deploys the page from `main`. Next is latency forensics. Design: [docs/spec.md](docs/spec.md) and [docs/adr/](docs/adr/). Synthetic users and auctions only, against local deployments.
 
 ## Run a storm
 
@@ -52,7 +52,7 @@ make site
 
 This checks the published recording (`runs/curated/first-storm`), prepares its data and builds the page into `site/dist`. `cd site && pnpm preview` serves it; `pnpm test:e2e` runs the browser tests and `pnpm readme-image` redraws the picture above.
 
-CI deploys `site/dist` to Cloudflare Pages on pushes to `main`. It stays off until the repository has the variable `CLOUDFLARE_PROJECT` and the secrets `CLOUDFLARE_API_TOKEN` (permission: Account, Cloudflare Pages, Edit) and `CLOUDFLARE_ACCOUNT_ID`. The project is a direct-upload one, made once with `wrangler pages project create <name> --production-branch main`.
+CI deploys `site/dist` to Cloudflare Pages ([bid-storm.pages.dev](https://bid-storm.pages.dev)) on pushes to `main`. In a fork it stays off until the repository has the variable `CLOUDFLARE_PROJECT` and the secrets `CLOUDFLARE_API_TOKEN` (permission: Account, Cloudflare Pages, Edit) and `CLOUDFLARE_ACCOUNT_ID`. The project is a direct-upload one, made once with `wrangler pages project create <name> --production-branch main`.
 
 ## Tests
 
