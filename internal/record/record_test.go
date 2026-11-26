@@ -56,9 +56,13 @@ func TestEventFormat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	w.Write(Bid{V: 1, Type: TypeBid, Seq: 3, Bidder: 2, IntendedUS: 10, Key: "a-3", Amount: 1100, MinNextSeen: 1100, PriceAgeUS: 5, Reply: reply})
-	w.Write(Poll{V: 1, Type: TypePoll, Seq: 3, N: 1, Reply: reply})
-	w.Write(Skipped{V: 1, Type: TypeSkipped, Seq: 4, Bidder: 1, IntendedUS: 20, AtUS: 21, Why: "in_flight_cap"})
+	w.Write(Bid{V: 2, Type: TypeBid, Seq: 3, Bidder: 2, IntendedUS: 10, Key: "a-3", Amount: 1100, MinNextSeen: 1100, PriceAgeUS: 5, Reply: reply})
+	w.Write(Poll{V: 2, Type: TypePoll, Seq: 3, N: 1, Reply: reply})
+	w.Write(Skipped{V: 2, Type: TypeSkipped, Seq: 4, Bidder: 1, IntendedUS: 20, AtUS: 21, Why: "in_flight_cap"})
+	op, version := "pi_1", int64(2)
+	w.Write(Hold{V: 2, Type: TypeHold, Op: "cancel", ReceivedUS: 30, RepliedUS: 31, IntentID: &op})
+	w.Write(Stream{V: 2, Type: TypeStream, Subscriber: 1, ArrivedUS: 40, Event: "bid.accepted", Version: 2, Amount: &version})
+	w.Write(Conn{V: 2, Type: TypeConn, Subscriber: 1, N: 1, Event: "open", AtUS: 50})
 	if err := w.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -67,9 +71,12 @@ func TestEventFormat(t *testing.T) {
 		t.Fatal(err)
 	}
 	const tail = `"sent_us":11,"replied_us":12,"http_status":201,"instance":null,"bid_id":"b1","bid_status":"accepted","reason":null,"error_code":null,"transport_error":null}` + "\n"
-	want := `{"v":1,"type":"bid","seq":3,"bidder":2,"intended_us":10,"idempotency_key":"a-3","amount":1100,"min_next_seen":1100,"price_age_us":5,"retry_of":null,` + tail +
-		`{"v":1,"type":"poll","seq":3,"n":1,` + tail +
-		`{"v":1,"type":"skipped","seq":4,"bidder":1,"intended_us":20,"at_us":21,"why":"in_flight_cap"}` + "\n"
+	want := `{"v":2,"type":"bid","seq":3,"bidder":2,"intended_us":10,"idempotency_key":"a-3","amount":1100,"min_next_seen":1100,"price_age_us":5,"retry_of":null,` + tail +
+		`{"v":2,"type":"poll","seq":3,"n":1,` + tail +
+		`{"v":2,"type":"skipped","seq":4,"bidder":1,"intended_us":20,"at_us":21,"why":"in_flight_cap"}` + "\n" +
+		`{"v":2,"type":"hold","op":"cancel","received_us":30,"replied_us":31,"bid_id":null,"auction_id":null,"intent_id":"pi_1","amount":null,"idempotency_key":null,"http_status":null,"ok":null,"reason":null,"retryable":null,"error_code":null,"transport_error":null}` + "\n" +
+		`{"v":2,"type":"stream","subscriber":1,"arrived_us":40,"event":"bid.accepted","version":2,"amount":2,"bidder":null,"server_at":null,"status":null}` + "\n" +
+		`{"v":2,"type":"stream_conn","subscriber":1,"n":1,"event":"open","at_us":50,"last_event_id":null,"instance":null,"http_status":null,"transport_error":null}` + "\n"
 	if string(got) != want {
 		t.Fatalf("format changed:\n got %s\nwant %s", got, want)
 	}

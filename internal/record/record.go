@@ -14,13 +14,16 @@ import (
 )
 
 // SchemaVersion is the "v" on every event and the manifest's schema_version.
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 // Event types.
 const (
 	TypeBid     = "bid"
 	TypePoll    = "poll"
 	TypeSkipped = "skipped"
+	TypeHold    = "hold"
+	TypeStream  = "stream"
+	TypeConn    = "stream_conn"
 )
 
 // Clock turns times into Unix microseconds as one wall-clock reading plus the monotonic time
@@ -80,6 +83,55 @@ type Skipped struct {
 	IntendedUS int64  `json:"intended_us"`
 	AtUS       int64  `json:"at_us"`
 	Why        string `json:"why"`
+}
+
+// Hold is one authorize, cancel or capture as it passed through the recording proxy.
+type Hold struct {
+	V          int     `json:"v"`
+	Type       string  `json:"type"`
+	Op         string  `json:"op"`          // authorize, cancel or capture
+	ReceivedUS int64   `json:"received_us"` // the target's request reached the proxy
+	RepliedUS  int64   `json:"replied_us"`  // the fake's answer was read, or forwarding failed
+	BidID      *string `json:"bid_id"`
+	AuctionID  *string `json:"auction_id"`
+	IntentID   *string `json:"intent_id"`
+	Amount     *int64  `json:"amount"`
+	Key        *string `json:"idempotency_key"`
+	HTTPStatus *int    `json:"http_status"` // from the fake; null if it never answered
+	OK         *bool   `json:"ok"`
+	Reason     *string `json:"reason"`
+	Retryable  *bool   `json:"retryable"`
+	ErrorCode  *string `json:"error_code"`
+	// TransportError is a fixed class, as in Reply.
+	TransportError *string `json:"transport_error"`
+}
+
+// Stream is one event as one live-stream subscriber received it.
+type Stream struct {
+	V          int     `json:"v"`
+	Type       string  `json:"type"`
+	Subscriber int     `json:"subscriber"`
+	ArrivedUS  int64   `json:"arrived_us"`
+	Event      string  `json:"event"` // snapshot, bid.accepted or auction.closed
+	Version    int64   `json:"version"`
+	Amount     *int64  `json:"amount"`
+	Bidder     *string `json:"bidder"`    // the target's public alias; the winner on a close
+	ServerAt   *string `json:"server_at"` // the target's own time for an accepted bid
+	Status     *string `json:"status"`    // the auction's, on a snapshot or close
+}
+
+// Conn is a subscriber's connection opening or ending.
+type Conn struct {
+	V              int     `json:"v"`
+	Type           string  `json:"type"`
+	Subscriber     int     `json:"subscriber"`
+	N              int     `json:"n"`     // 1 for its first connection
+	Event          string  `json:"event"` // open or end
+	AtUS           int64   `json:"at_us"`
+	LastEventID    *int64  `json:"last_event_id"` // what a resume asked to continue from
+	Instance       *string `json:"instance"`
+	HTTPStatus     *int    `json:"http_status"`
+	TransportError *string `json:"transport_error"`
 }
 
 // Writer appends events as JSON lines. Safe for many goroutines at once.

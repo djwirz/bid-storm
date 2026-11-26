@@ -1,4 +1,4 @@
-# Recording format (schema version 1)
+# Recording format (schema version 2)
 
 A run is a folder, `runs/<UTC time>-s<seed>/`. The rules for changing this format are in [ADR 0007](adr/0007-event-schema.md). Times are integer Unix microseconds. A value that doesn't apply is `null`.
 
@@ -35,7 +35,34 @@ One JSON object per line, in the order exchanges **finished**. Sort by a time or
 
 **`skipped`**: a send never made. `seq`, `bidder`, `intended_us`, `at_us`, `why` (`in_flight_cap`).
 
-**Exchange fields**
+**`hold`**: one request from the target to the Stripe fake, seen by the recording proxy.
+
+| Field | Meaning |
+|---|---|
+| `op` | `authorize`, `cancel` or `capture` |
+| `received_us`, `replied_us` | The request reached the proxy; the fake's answer had been read (or forwarding failed). The target gets the answer after `replied_us` |
+| `bid_id`, `auction_id` | From the authorize request. Cancel and capture name only the intent, so theirs come from the authorize reply that created it; `null` if that was never seen |
+| `intent_id`, `amount`, `idempotency_key` | As sent (the intent id of an authorize is from the reply). A cancel has no amount |
+| `http_status`, `ok`, `reason`, `retryable`, `error_code`, `transport_error` | The fake's answer. A `503` (`error_code` `transient`) says nothing about whether a hold exists, and the target asks again |
+
+**`stream`**: one event as one subscriber received it. `subscriber` (from 0), `arrived_us`, `event` (`snapshot`, `bid.accepted`, `auction.closed`), `version`, `amount`, `bidder` (the target's public alias; the winner on a close), `server_at` (the target's clock, as text) and `status`.
+
+**`stream_conn`**: a subscriber's connection. `subscriber`, `n` from 1, `event` (`open` or `end`), `at_us`, `last_event_id` (set when resuming), `instance`, `http_status`, `transport_error`.
+
+Subscribers connect before the first bid. Don't assume versions are contiguous.
+
+## Joining a bid's timeline
+| Stage | Where | Join on |
+|---|---|---|
+| Intended send, send, reply | `bid`, then `poll` | `seq`; `bid_id` once known |
+| Hold, release, capture | `hold` | `bid_id` |
+| Announcement to each subscriber | `stream`, `bid.accepted` | `amount` |
+
+Stream events name no bid. Accepted amounts strictly increase within an auction, so an amount identifies one accepted bid there. Rejected bids can share that amount, so join only to bids seen `accepted`, `outbid` or `won`.
+
+A hold can be retried, so a bid may have several `authorize` lines. Use the one with `ok` true.
+
+**Exchange fields** (of `bid` and `poll`)
 
 | Field | Meaning |
 |---|---|
@@ -57,16 +84,19 @@ Written when the run starts and again when it ends.
 | Field | Meaning |
 |---|---|
 | `schema_version`, `run_id`, `started_us`, `ended_us` | |
-| `complete` | The whole schedule ran and the events were saved |
-| `valid`, `invalid_reasons` | Whether the generator kept up (spec §5). Not a verdict on the target |
+| `complete` | The whole schedule ran, the close reached every subscriber, every hold seen was settled and the events were saved |
+| `valid`, `invalid_reasons` | Whether the recording can be trusted: the generator kept up (spec §5) and no accepted bid is missing a stage. Not a verdict on the target |
 | `schedule`, `schedule_from` | The schedule's `params`; `generated` or `file` |
-| `settings` | Auction length, lag limit, in-flight cap, price, poll and timeout intervals |
+| `settings` | Auction length, lag limit, in-flight cap, price, poll and timeout intervals, whether the proxy ran, subscriber count, drain limit |
 | `target` | Name, URL, auction id, checkout commit and whether it was dirty, declared fake settings, instances seen |
 | `machine` | OS, architecture, CPU count |
 | `generator` | Go version, source revision and whether it was dirty |
-| `results` | Counts and send lag, for a quick look; the events are the record. `bids_by_last_status` is what replies last showed, not final state: most outbid bids are never read again |
+| `results` | Counts and send lag, for a quick look; the events are the record. `bids_by_last_status` is what replies last showed, not final state: most outbid bids are never read again. `hold_calls` is `null` when the proxy was off. `drain_us` is the wait for the target after the last reply and `drain_waiting` what never happened. `timeline` counts accepted bids with a stage missing |
 
 `invalid_reasons` on a recording whose generator was killed reads "the run did not finish".
 
 ## Not recorded
-Cookies, session tokens, headers, raw bodies, error message text, hostnames, user names and file paths. The price reader's requests (counted only if they fail) and sign-ins. The close and the order of accepted bids arrive with the stream subscribers (slice 1b).
+Cookies, session tokens, headers, raw bodies, error message text, hostnames, user names and file paths. The price reader's requests (counted only if they fail) and sign-ins. The proxy never reads `userId`, and passes other requests to the fake (such as `/audit`) without recording them. The fake's `/audit` and the target's own checker come with slice 1c.
+
+## Version 1
+Slice 1a wrote version 1. Its `bid`, `poll` and `skipped` lines are the same apart from `v`, and it has no `hold`, `stream` or `stream_conn` lines. Version 2 raised the number because the manifest's `complete` and `valid` now mean more: in version 1 they said nothing about the close, holds or announcements. The `schedule.json` format has its own version, still 1.

@@ -9,12 +9,15 @@ import (
 
 // Manifest says what produced a recording (spec §3). It holds no hostnames, user names or paths.
 type Manifest struct {
-	SchemaVersion  int             `json:"schema_version"`
-	RunID          string          `json:"run_id"`
-	StartedUS      int64           `json:"started_us"`
-	EndedUS        int64           `json:"ended_us"`
-	Complete       bool            `json:"complete"` // the whole schedule ran and the events were saved
-	Valid          bool            `json:"valid"`    // complete, and the generator kept up (spec §5)
+	SchemaVersion int    `json:"schema_version"`
+	RunID         string `json:"run_id"`
+	StartedUS     int64  `json:"started_us"`
+	EndedUS       int64  `json:"ended_us"`
+	// Complete: the whole schedule ran, the target's follow-up work was seen to finish and the
+	// events were saved.
+	Complete bool `json:"complete"`
+	// Valid: complete, the generator kept up (spec §5) and no accepted bid is missing a stage.
+	Valid          bool            `json:"valid"`
 	InvalidReasons []string        `json:"invalid_reasons"`
 	Schedule       schedule.Params `json:"schedule"`
 	ScheduleFrom   string          `json:"schedule_from"` // "generated" or "file"
@@ -34,6 +37,9 @@ type Settings struct {
 	PollEveryUS      int64 `json:"poll_every_us"`
 	PollTimeoutUS    int64 `json:"poll_timeout_us"`
 	RequestTimeoutUS int64 `json:"request_timeout_us"`
+	Proxy            bool  `json:"proxy"` // false: holds were not recorded
+	Subscribers      int   `json:"subscribers"`
+	DrainTimeoutUS   int64 `json:"drain_timeout_us"`
 }
 
 // Target describes what was stormed.
@@ -79,6 +85,21 @@ type Results struct {
 	Polls           int            `json:"polls"`
 	UnresolvedBids  int            `json:"unresolved_bids"` // still pending when polling gave up
 	PriceReadErrors int            `json:"price_read_errors"`
+
+	HoldCalls        map[string]int `json:"hold_calls"` // authorize, cancel and capture requests seen
+	StreamEvents     int            `json:"stream_events"`
+	StreamReconnects int            `json:"stream_reconnects"`
+	DrainUS          int64          `json:"drain_us"`      // waiting for the target after the last reply
+	DrainWaiting     []string       `json:"drain_waiting"` // what had not happened when the wait ended
+	Timeline         Timeline       `json:"timeline"`
+}
+
+// Timeline counts accepted bids with a stage missing from the recording. These test the
+// recording, not the target: whether holds came first is for the checks (slice 1c).
+type Timeline struct {
+	AcceptedWithoutHold int `json:"accepted_without_hold"` // 0 when the proxy is off
+	AcceptedUnannounced int `json:"accepted_unannounced"`  // missing from at least one subscriber
+	AnnouncedUnclaimed  int `json:"announced_unclaimed"`   // streamed amounts no recorded bid matches
 }
 
 // Save writes the manifest, replacing any earlier one.
