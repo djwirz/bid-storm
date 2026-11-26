@@ -207,3 +207,5 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Findings show in the job log; commenting would need pull-requests: write.
           GITLEAKS_ENABLE_COMMENTS: 'false'
+          # The action's default (8.24.3) predates the [[allowlists]] form .gitleaks.toml uses.
+          GITLEAKS_VERSION: 8.30.1
