@@ -73,6 +73,7 @@ func accept(w http.ResponseWriter, key string, _ int64) {
 type recording struct {
 	res       record.Results
 	instances []string
+	accepted  map[string]int64
 	err       error
 	raw       string
 	bids      map[int]record.Bid
@@ -103,7 +104,9 @@ func storm(t *testing.T, f *fakeTarget, entries []schedule.Entry, change func(*C
 		t.Fatal(err)
 	}
 	out := recording{bids: map[int]record.Bid{}}
-	out.res, out.instances, out.err = Run(context.Background(), cfg, client, w, record.NewClock())
+	var got Outcome
+	got, out.err = Run(context.Background(), cfg, client, w, record.NewClock())
+	out.res, out.instances, out.accepted = got.Results, got.Instances, got.Accepted
 	if err := w.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -188,6 +191,9 @@ func TestPendingBidsArePolled(t *testing.T) {
 	if len(got.polls) != 1 || got.polls[0].N != 1 || *got.polls[0].BidStatus != "accepted" {
 		t.Fatalf("polls %+v", got.polls)
 	}
+	if got.accepted["b1"] != 1000 {
+		t.Fatalf("accepted %v", got.accepted)
+	}
 	if got.res.AcceptedBids != 1 || got.res.UnresolvedBids != 0 || got.res.LastStatuses["accepted"] != 1 {
 		t.Fatalf("%+v", got.res)
 	}
@@ -255,5 +261,46 @@ func TestVerdict(t *testing.T) {
 	r := InvalidReasons(record.Results{SendLagMaxUS: 60_000}, 50*time.Millisecond, context.Canceled, errors.New("disk"))
 	if len(r) != 3 {
 		t.Fatal(r)
+	}
+}
+
+func TestDrain(t *testing.T) {
+	left := 3
+	late := func() string {
+		if left--; left > 0 {
+			return "a cancel"
+		}
+		return ""
+	}
+	if w := Drain(context.Background(), 5*time.Second, late); len(w) != 0 || left != 0 {
+		t.Fatalf("%v, %d", w, left)
+	}
+	never := func() string { return "the close" }
+	done := func() string { return "" }
+	w := Drain(context.Background(), 100*time.Millisecond, never, done)
+	if len(w) != 1 || w[0] != "the close" {
+		t.Fatalf("%v", w)
+	}
+	if r := InvalidReasons(record.Results{DrainWaiting: w}, time.Second, nil, nil); len(r) != 1 {
+		t.Fatal(r)
+	}
+}
+
+func TestTimeline(t *testing.T) {
+	accepted := map[string]int64{"a": 1000, "b": 1100}
+	whole := []map[int64]bool{{1000: true, 1100: true}, {1000: true, 1100: true}}
+	if got := CheckTimeline(accepted, map[string]bool{"a": true, "b": true}, whole); got != (record.Timeline{}) {
+		t.Fatalf("%+v", got)
+	}
+	got := CheckTimeline(accepted, map[string]bool{"a": true}, []map[int64]bool{{1000: true, 1100: true}, {1000: true, 1200: true}})
+	if want := (record.Timeline{AcceptedWithoutHold: 1, AcceptedUnannounced: 1, AnnouncedUnclaimed: 1}); got != want {
+		t.Fatalf("%+v", got)
+	}
+	if r := InvalidReasons(record.Results{AcceptedBids: 2, HoldCalls: map[string]int{}, Timeline: got}, time.Second, nil, nil); len(r) != 4 {
+		t.Fatal(r)
+	}
+	// Without the proxy there are no holds to miss.
+	if got := CheckTimeline(accepted, nil, whole); got != (record.Timeline{}) {
+		t.Fatalf("%+v", got)
 	}
 }

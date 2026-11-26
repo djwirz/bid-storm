@@ -16,6 +16,19 @@ func InvalidReasons(res record.Results, lagLimit time.Duration, runErr, writeErr
 	if res.Skipped > 0 {
 		reasons = append(reasons, fmt.Sprintf("%d sends skipped at the in-flight cap", res.Skipped))
 	}
+	if res.AcceptedBids > 0 && res.HoldCalls != nil && res.HoldCalls["authorize"] == 0 {
+		reasons = append(reasons, "bids were accepted but the proxy saw no authorize: is the target's FAKE_PAYMENTS_URL pointed at it?")
+	}
+	if n := res.Timeline.AcceptedWithoutHold; n > 0 {
+		reasons = append(reasons, fmt.Sprintf("%d accepted bids have no successful hold recorded", n))
+	}
+	if n := res.Timeline.AcceptedUnannounced; n > 0 {
+		reasons = append(reasons, fmt.Sprintf("%d accepted bids did not reach every subscriber", n))
+	}
+	if n := res.Timeline.AnnouncedUnclaimed; n > 0 {
+		reasons = append(reasons, fmt.Sprintf("%d streamed bids match no recorded accepted bid", n))
+	}
+	reasons = append(reasons, res.DrainWaiting...)
 	if runErr != nil {
 		reasons = append(reasons, "the run stopped early")
 	}

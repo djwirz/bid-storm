@@ -9,20 +9,26 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/djwirz/bid-storm/internal/contract"
+	"github.com/djwirz/bid-storm/internal/proxy"
 	"github.com/djwirz/bid-storm/internal/record"
 	"github.com/djwirz/bid-storm/internal/schedule"
 	"github.com/djwirz/bid-storm/internal/storm"
+	"github.com/djwirz/bid-storm/internal/stream"
+	"github.com/djwirz/bid-storm/internal/target"
 	"github.com/djwirz/bid-storm/internal/target/holdfast"
 )
 
@@ -49,6 +55,11 @@ func main() {
 
 type options struct {
 	url, origin, checkout, node, database, fakeEnv, out, scheduleFile string
+	proxyListen, fakeURL                                              string
+
+	proxy        bool
+	subscribers  int
+	drainTimeout time.Duration
 
 	params          schedule.Params
 	duration        time.Duration
@@ -92,6 +103,11 @@ func parse(args []string) (options, error) {
 	f.DurationVar(&o.pollEvery, "poll-every", 500*time.Millisecond, "how often a pending bid is polled")
 	f.DurationVar(&o.pollTimeout, "poll-timeout", 60*time.Second, "when to give up on a pending bid")
 	f.DurationVar(&o.requestsTimeout, "timeout", 30*time.Second, "per-request timeout")
+	f.BoolVar(&o.proxy, "proxy", true, "record holds; with -proxy=false the target must call the fake directly")
+	f.StringVar(&o.proxyListen, "proxy-listen", "127.0.0.1:4011", "where the recording proxy listens: the target's FAKE_PAYMENTS_URL")
+	f.StringVar(&o.fakeURL, "fake-url", "http://127.0.0.1:4010", "the Stripe fake the proxy forwards to (this machine only)")
+	f.IntVar(&o.subscribers, "subscribers", 4, "live-stream subscribers")
+	f.DurationVar(&o.drainTimeout, "drain-timeout", 90*time.Second, "how long to wait for the close and every hold to be settled")
 	if err := f.Parse(args); err != nil {
 		return o, err
 	}
@@ -107,6 +123,12 @@ func parse(args []string) (options, error) {
 	}
 	if o.auction < time.Second || o.priceEvery <= 0 || o.pollEvery <= 0 || o.maxInFlight <= 0 {
 		return o, errors.New("-auction must be at least 1s; intervals and -max-in-flight must be positive")
+	}
+	if o.subscribers < 0 || o.drainTimeout <= 0 {
+		return o, errors.New("-subscribers can't be negative and -drain-timeout must be positive")
+	}
+	if err := target.CheckLoopback("http://" + o.proxyListen); o.proxy && err != nil {
+		return o, fmt.Errorf("-proxy-listen: %w", err)
 	}
 	o.params.DurationUS = o.duration.Microseconds()
 	return o, nil
@@ -151,6 +173,16 @@ func run(ctx context.Context, args []string) error {
 	}
 	client := contract.New(hc, o.url, o.origin, adapter.InstanceHeader())
 
+	// Up before anything is bid: the target's holds go through it.
+	var holds *proxy.Proxy
+	var proxyServer *http.Server
+	if o.proxy {
+		if holds, proxyServer, err = startProxy(o.proxyListen, o.fakeURL); err != nil {
+			return err
+		}
+		defer proxyServer.Close()
+	}
+
 	// Sign in before the auction exists, so its clock isn't spent on this.
 	sessions, err := signIn(ctx, client, plan.Params.Bidders)
 	if err != nil {
@@ -191,6 +223,7 @@ func run(ctx context.Context, args []string) error {
 			LagLimitUS:     o.lagLimit.Microseconds(), MaxInFlight: o.maxInFlight,
 			PriceEveryUS: o.priceEvery.Microseconds(), PollEveryUS: o.pollEvery.Microseconds(),
 			PollTimeoutUS: o.pollTimeout.Microseconds(), RequestTimeoutUS: o.requestsTimeout.Microseconds(),
+			Proxy: o.proxy, Subscribers: o.subscribers, DrainTimeoutUS: o.drainTimeout.Microseconds(),
 		},
 		Target: record.Target{
 			Name: adapter.Name(), URL: o.url, AuctionID: auctionID,
@@ -206,18 +239,64 @@ func run(ctx context.Context, args []string) error {
 		return err
 	}
 
+	if holds != nil {
+		holds.Record(events, clock, auctionID)
+	}
+	subscribers, err := stream.Subscribe(ctx, client, auctionID, o.subscribers, events, clock)
+	if err != nil {
+		return err
+	}
+	defer subscribers.Stop()
+
 	fmt.Printf("run %s: %d bids from %d bidders over %s, auction %s\n",
 		runID, len(plan.Entries), plan.Params.Bidders, time.Duration(plan.Params.DurationUS)*time.Microsecond, auctionID)
-	results, instances, runErr := storm.Run(ctx, storm.Config{
+	outcome, runErr := storm.Run(ctx, storm.Config{
 		Schedule: plan, AuctionID: auctionID, Sessions: sessions, MaxInFlight: o.maxInFlight,
 		PriceEvery: o.priceEvery, PollEvery: o.pollEvery, PollTimeout: o.pollTimeout,
 	}, client, events, clock)
+
+	// The target still has the close to announce and holds to release or capture.
+	results := outcome.Results
+	waitFor := []func() string{subscribers.Waiting}
+	if holds != nil {
+		waitFor = append(waitFor, func() string {
+			if n := holds.Outstanding(); n > 0 {
+				return fmt.Sprintf("%d holds not yet answered, released or captured", n)
+			}
+			return ""
+		})
+	}
+	drainStart := time.Now()
+	results.DrainWaiting = []string{}
+	if runErr == nil {
+		results.DrainWaiting = storm.Drain(ctx, o.drainTimeout, waitFor...)
+		runErr = ctx.Err()
+	}
+	results.DrainUS = time.Since(drainStart).Microseconds()
+
+	// Everything that writes events stops before the file closes.
+	seen := subscribers.Stop()
+	var held map[string]bool
+	results.HoldCalls = nil
+	if holds != nil {
+		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := proxyServer.Shutdown(shutdown); err != nil {
+			proxyServer.Close()
+		}
+		held, results.HoldCalls = holds.Held()
+	}
+	results.StreamEvents, results.StreamReconnects = seen.Events, seen.Reconnects
+	results.Timeline = storm.CheckTimeline(outcome.Accepted, held, seen.Announced)
 	writeErr := events.Close()
 
 	manifest.EndedUS = clock.US(time.Now())
 	manifest.Results = results
-	manifest.Target.InstancesSeen = append(manifest.Target.InstancesSeen, instances...)
-	manifest.Complete = runErr == nil && writeErr == nil
+	manifest.Target.InstancesSeen = append(manifest.Target.InstancesSeen, outcome.Instances...)
+	manifest.Target.InstancesSeen = append(manifest.Target.InstancesSeen, seen.Instances...)
+	slices.Sort(manifest.Target.InstancesSeen)
+	manifest.Target.InstancesSeen = slices.Compact(manifest.Target.InstancesSeen)
+	manifest.Complete = runErr == nil && writeErr == nil && len(results.DrainWaiting) == 0
 	manifest.InvalidReasons = storm.InvalidReasons(results, o.lagLimit, runErr, writeErr)
 	manifest.Valid = len(manifest.InvalidReasons) == 0
 	if err := manifest.Save(manifestPath); err != nil {
@@ -246,11 +325,28 @@ func summarize(w io.Writer, dir string, m record.Manifest) {
 	if len(r.TransportErrors) > 0 || r.PriceReadErrors > 0 {
 		fmt.Fprintf(w, "transport errors %v, price read errors %d\n", r.TransportErrors, r.PriceReadErrors)
 	}
+	fmt.Fprintf(w, "holds %v, stream events %d, reconnects %d, waited %s for the target\n",
+		r.HoldCalls, r.StreamEvents, r.StreamReconnects, ms(r.DrainUS).Round(time.Millisecond))
 	fmt.Fprintf(w, "send lag p99 %s, max %s; instances %v\n", ms(r.SendLagP99US), ms(r.SendLagMaxUS), m.Target.InstancesSeen)
 	for _, reason := range m.InvalidReasons {
 		fmt.Fprintln(w, "INVALID:", reason)
 	}
 	fmt.Fprintln(w, "recording:", dir)
+}
+
+// startProxy listens for the target's calls to the fake.
+func startProxy(listen, fakeURL string) (*proxy.Proxy, *http.Server, error) {
+	p, err := proxy.New(fakeURL)
+	if err != nil {
+		return nil, nil, err
+	}
+	l, err := net.Listen("tcp", listen)
+	if err != nil {
+		return nil, nil, fmt.Errorf("recording proxy: %w", err)
+	}
+	server := &http.Server{Handler: p, ReadHeaderTimeout: 5 * time.Second}
+	go server.Serve(l) // returns when the server is shut down
+	return p, server, nil
 }
 
 // signIn gets one session per bidder, a few at a time. The same logins are reused by every run.

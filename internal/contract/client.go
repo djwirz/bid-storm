@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -27,6 +28,7 @@ const (
 type Client struct {
 	base, origin, instanceHeader string
 	http                         *http.Client
+	streams                      *http.Client // the same, without a limit on the whole exchange
 }
 
 // NewHTTPClient is the client every request to a target goes through.
@@ -51,7 +53,9 @@ func NewHTTPClient(timeout time.Duration) *http.Client {
 // New makes a client. origin is sent on every POST; instanceHeader names the response header
 // that says which instance answered, or is empty.
 func New(hc *http.Client, base, origin, instanceHeader string) *Client {
-	return &Client{base: strings.TrimRight(base, "/"), origin: origin, instanceHeader: instanceHeader, http: hc}
+	streams := *hc
+	streams.Timeout = 0 // a live stream lasts as long as the auction; its context ends it
+	return &Client{base: strings.TrimRight(base, "/"), origin: origin, instanceHeader: instanceHeader, http: hc, streams: &streams}
 }
 
 // Session is a signed-in bidder's cookie. It prints as a placeholder so it can't be logged.
@@ -102,6 +106,27 @@ func (c *Client) Snapshot(ctx context.Context, auctionID string) (Snapshot, erro
 		return Snapshot{}, fmt.Errorf("read auction: %w", err)
 	}
 	return body.Auction, nil
+}
+
+// Stream opens an auction's live stream, resuming after lastEventID if it isn't nil. The
+// caller closes the body. instance is whichever instance answered, if the target says.
+func (c *Client) Stream(ctx context.Context, auctionID string, lastEventID *int64) (res *http.Response, instance string, err error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/api/auctions/"+url.PathEscape(auctionID)+"/events", nil)
+	if err != nil {
+		return nil, "", err
+	}
+	req.Header.Set("Accept", "text/event-stream")
+	if lastEventID != nil {
+		req.Header.Set("Last-Event-ID", strconv.FormatInt(*lastEventID, 10))
+	}
+	res, err = c.streams.Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	if c.instanceHeader != "" {
+		instance = Clip(res.Header.Get(c.instanceHeader))
+	}
+	return res, instance, nil
 }
 
 // Result is the outcome of one bid or poll request. Empty fields weren't in the reply.
@@ -158,17 +183,17 @@ func (c *Client) do(ctx context.Context, method, path string, s Session, key str
 
 func (c *Client) result(res *http.Response, err error) Result {
 	if err != nil {
-		return Result{TransportError: classify(err)}
+		return Result{TransportError: Classify(err)}
 	}
 	defer res.Body.Close()
 	out := Result{HTTPStatus: res.StatusCode}
 	if c.instanceHeader != "" {
-		out.Instance = clip(res.Header.Get(c.instanceHeader))
+		out.Instance = Clip(res.Header.Get(c.instanceHeader))
 	}
 	// Read to the end so the connection can be reused.
 	raw, err := io.ReadAll(io.LimitReader(res.Body, maxBody))
 	if err != nil {
-		out.TransportError = classify(err)
+		out.TransportError = Classify(err)
 		return out
 	}
 	var body struct {
@@ -183,24 +208,26 @@ func (c *Client) result(res *http.Response, err error) Result {
 		out.TransportError = "bad_response"
 		return out
 	}
-	out.ErrorCode = clip(body.Error)
+	out.ErrorCode = Clip(body.Error)
 	if b := body.Bid; b != nil {
-		out.BidID, out.BidStatus = clip(b.ID), clip(b.Status)
+		out.BidID, out.BidStatus = Clip(b.ID), Clip(b.Status)
 		if b.Reason != nil {
-			out.Reason = clip(*b.Reason)
+			out.Reason = Clip(*b.Reason)
 		}
 	}
 	return out
 }
 
-func clip(s string) string {
+// Clip bounds a server-supplied string before it is recorded.
+func Clip(s string) string {
 	if len(s) > maxField {
 		return s[:maxField]
 	}
 	return s
 }
 
-func classify(err error) string {
+// Classify names a transport failure with a fixed word, so no error text is recorded.
+func Classify(err error) string {
 	var timeout net.Error
 	switch {
 	case errors.Is(err, context.Canceled):
