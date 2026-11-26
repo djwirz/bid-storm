@@ -9,7 +9,7 @@ generator (Go) ──HTTP──▶ target (Holdfast) ──▶ recording proxy (
      ▲  └─ stream subscribers ◀──SSE──┘                 │
      └────────────── events (JSON lines) ◀──────────────┘
                           │
-                 analysis (Python, DuckDB) ──▶ Parquet ──▶ site (TypeScript, D3, DuckDB-WASM)
+                 analysis (Python, DuckDB) ──▶ Parquet, and prepared JSON ──▶ site (TypeScript, D3)
 ```
 A small per-target adapter covers what the contract lacks: creating an auction, and running the target's own checker. Holdfast has no endpoint for creating auctions, so its adapter runs Holdfast's own `seed-e2e.ts` from a local checkout, as `load/run.sh` does. That fixes the starting price and increment.
 
@@ -50,7 +50,9 @@ Each ends before the next starts.
 
 Version one ends at 2d. 2a is a fair stopping point.
 
-In 2a, check Cloudflare Pages limits (25 MiB per file on the free plan when last read) against the DuckDB-WASM binary and the Parquet files (verify).
+Checked in 2a: Cloudflare's free limit is 25 MiB per file and the DuckDB-WASM binary was over 30 MiB, so the first views read prepared JSON and in-browser queries wait until a view needs them (ADR 0009).
+
+2a's page shows the rule checks, price staircase, race lanes and stream agreement. The hold ledger goes with the fault view in 2c.
 
 ## 8. Later, not designed here
 - **A Stripe fake and a deployed target.** First measure whether the current fake limits throughput. The better case for a new one is fidelity: speaking Stripe's API would load the target's real adapter. Keep it private, set a budget alarm, check host terms.
@@ -59,4 +61,4 @@ In 2a, check Cloudflare Pages limits (25 MiB per file on the free plan when last
 ## 9. Open questions
 1. Settled before slice 1b: the proxy is in Go (ADR 0003), confirmed by Dan.
 2. Settled in slice 1a: the adapter runs the target's own seed script (§2).
-3. Which recordings are small and interesting enough to commit? Slice 2a.
+3. Settled in slice 2a: raw files of chosen runs in `runs/curated/<name>/`; the first is one default storm (ADR 0009).
