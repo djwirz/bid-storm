@@ -3,7 +3,7 @@
 A Go load generator and recording proxy that capture every stage of a bid storm, Python and DuckDB to check and summarize the recordings, and a static TypeScript and D3 site that goes deep on the data. First target: Holdfast. Use they/them for Dan.
 
 ## Status
-Design accepted (PR #1). Slices 1a (generator) and 1b (recording proxy, stream subscribers) are built: `make storm` records a storm against a local Holdfast (README), `make test` checks it. Next is slice 1c: conversion, checks and CI. Format: `docs/recording-format.md`. Background: `~/projects/build-plan/research/bid-storm-scoping-2026-11-26.md`.
+Design accepted (PR #1). Slices 1a (generator), 1b (recording proxy, stream subscribers) and 1c (Parquet conversion, checks, CI) are built: `make storm` records a storm against a local Holdfast, `make check` judges the recording (README), `make test` tests the code. Next is slice 2a: the site. Format: `docs/recording-format.md`. Background: `~/projects/build-plan/research/bid-storm-scoping-2026-11-26.md`.
 
 ## How we work
 - Pull requests only; never push to `main`. Merged PRs are the project's record.

@@ -1,0 +1,10 @@
+# golangci-lint v2, with its standard linters.
+version: "2"
+linters:
+  exclusions:
+    presets:
+      - std-error-handling # unchecked Close, Fprint and the like
+    rules:
+      # Tests fail on the assertion that follows, not on every call in a stand-in server.
+      - path: _test\.go
+        linters: [errcheck]

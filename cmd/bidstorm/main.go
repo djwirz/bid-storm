@@ -274,6 +274,21 @@ func run(ctx context.Context, args []string) error {
 	}
 	results.DrainUS = time.Since(drainStart).Microseconds()
 
+	// The target's checker runs while the proxy is still up, so anything the target has left
+	// to settle can still reach the fake and be recorded.
+	var evidence record.EndOfRun
+	var check record.Check
+	if runErr == nil {
+		if check, err = adapter.Check(ctx, auctionID, o.fakeURL); err != nil {
+			fmt.Fprintln(os.Stderr, "bidstorm: no verdict from the target's checker:", err)
+		} else if err := record.SaveJSON(filepath.Join(dir, "check.json"), check); err != nil {
+			return err
+		} else {
+			evidence.CheckSaved = true
+		}
+		runErr = ctx.Err()
+	}
+
 	// Everything that writes events stops before the file closes.
 	seen := subscribers.Stop()
 	var held map[string]bool
@@ -285,12 +300,26 @@ func run(ctx context.Context, args []string) error {
 		}
 		held, results.HoldCalls = holds.Held()
 	}
+	// After the checker, which waits for the target to be quiet.
+	if runErr == nil {
+		intents, err := proxy.Audit(ctx, o.fakeURL, auctionID)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "bidstorm:", err)
+		} else {
+			audit := record.Audit{V: record.SchemaVersion, AuctionID: auctionID, FetchedUS: clock.US(time.Now()), Intents: intents}
+			if err := record.SaveJSON(filepath.Join(dir, "audit.json"), audit); err != nil {
+				return err
+			}
+			evidence.AuditSaved = true
+		}
+	}
 	results.StreamEvents, results.StreamReconnects = seen.Events, seen.Reconnects
 	results.Timeline = storm.CheckTimeline(outcome.Accepted, held, seen.Announced)
 	writeErr := events.Close()
 
 	manifest.EndedUS = clock.US(time.Now())
 	manifest.Results = results
+	manifest.EndOfRun = evidence
 	manifest.Target.InstancesSeen = append(manifest.Target.InstancesSeen, outcome.Instances...)
 	manifest.Target.InstancesSeen = append(manifest.Target.InstancesSeen, seen.Instances...)
 	slices.Sort(manifest.Target.InstancesSeen)
@@ -303,6 +332,10 @@ func run(ctx context.Context, args []string) error {
 	}
 
 	summarize(os.Stdout, dir, manifest)
+	// Shown, not judged: `make check` is the gate (ADR 0008).
+	if evidence.CheckSaved {
+		fmt.Printf("target's checker: exit %d, %d violations\n", check.ExitCode, len(check.Violations))
+	}
 	switch {
 	case runErr != nil:
 		return fmt.Errorf("%w: %w", errNotUsable, runErr)
@@ -344,7 +377,7 @@ func startProxy(listen, fakeURL string) (*proxy.Proxy, *http.Server, error) {
 		return nil, nil, fmt.Errorf("recording proxy: %w", err)
 	}
 	server := &http.Server{Handler: p, ReadHeaderTimeout: 5 * time.Second}
-	go server.Serve(l) // returns when the server is shut down
+	go func() { _ = server.Serve(l) }() // returns when the server is shut down
 	return p, server, nil
 }
 

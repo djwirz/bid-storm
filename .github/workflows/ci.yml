@@ -1,0 +1,158 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go lint and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache: false # no dependencies to cache
+      - run: test -z "$(gofmt -l .)" || { gofmt -d .; exit 1; }
+      - run: go vet ./...
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.15.0
+      - run: go test -race ./...
+
+  python:
+    name: Python lint and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: analysis
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          version: 0.13.10
+      - run: uv sync --locked
+      - run: uv run --locked ruff check .
+      - run: uv run --locked ruff format --check .
+      - run: uv run --locked pytest -q
+
+  storm:
+    name: Small storm, recorded and checked
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Everything is local to the runner: Holdfast, its Stripe fake, Postgres and Redis.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: holdfast
+          POSTGRES_PASSWORD: holdfast
+          POSTGRES_DB: holdfast
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U holdfast -d holdfast"
+          --health-interval 2s --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:8
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgres://holdfast:holdfast@localhost:5432/holdfast
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The target, pinned: a change there shouldn't turn this repo's checks red on its own.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: djwirz/holdfast
+          ref: 427109f8813b6f72a7bb0b8bd42b6033bf250756
+          path: holdfast
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          package_json_file: holdfast/package.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: holdfast/.nvmrc
+          cache: pnpm
+          cache-dependency-path: holdfast/pnpm-lock.yaml
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          version: 0.13.10
+      # Outside this checkout, so the manifest doesn't call the generator's source dirty.
+      - name: Install Holdfast
+        run: |
+          mv holdfast "$RUNNER_TEMP/holdfast"
+          echo "HOLDFAST_DIR=$RUNNER_TEMP/holdfast" >> "$GITHUB_ENV"
+          cd "$RUNNER_TEMP/holdfast"
+          pnpm install --frozen-lockfile
+          pnpm db:migrate
+      - name: Start the stack, with card calls going through the recording proxy
+        run: |
+          set -a; . targets/holdfast/fake.env; set +a
+          FAKE_PAYMENTS_URL=http://127.0.0.1:4011 nohup bash "$HOLDFAST_DIR/load/stack.sh" > stack.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf localhost:3000/api/healthz && curl -sf localhost:4010/healthz && exit 0
+            sleep 1
+          done
+          cat stack.log; exit 1
+      # A smoke test, not a measurement: shared runners stall, so the lag limit is loose here.
+      # The manifest records it.
+      - run: make storm ARGS="-rate 20 -duration 8s -auction 6s -max-lag 250ms"
+      - run: make check
+      - name: A broken copy of the same recording must fail
+        run: |
+          run=$(ls -d runs/2* | sort | tail -1)
+          broken="$RUNNER_TEMP/broken"
+          cp -r "$run" "$broken"
+          jq -c 'select((.type == "hold" and .op == "authorize" and .ok == true) | not)' \
+            "$run/events.jsonl" > "$broken/events.jsonl"
+          status=0
+          make check RUN="$broken" > broken.txt 2>&1 || status=$?
+          cat broken.txt
+          # make reports any failing recipe as 2, so look at what the check said.
+          test "$status" -ne 0
+          grep -q "^FAIL  hold_first" broken.txt
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: recording
+          path: |
+            runs/
+            stack.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  gitleaks:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Findings show in the job log; commenting would need pull-requests: write.
+          GITLEAKS_ENABLE_COMMENTS: 'false'

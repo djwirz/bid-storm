@@ -4,7 +4,7 @@ A load generator that records every stage of a bid storm against a real-time auc
 
 The question the data should answer on sight: many bids land at once, they get one agreed order, and none counts without a hold.
 
-**Status:** slice 1b. A storm against a local Holdfast is recorded end to end: each bid, its card hold and the live stream. Checks and the site come next. Design: [docs/spec.md](docs/spec.md) and [docs/adr/](docs/adr/). Synthetic users and auctions only, against local deployments.
+**Status:** slice 1c. A storm against a local Holdfast is recorded end to end (each bid, its card hold and the live stream), converted to Parquet and checked, and CI runs a small one. The site comes next. Design: [docs/spec.md](docs/spec.md) and [docs/adr/](docs/adr/). Synthetic users and auctions only, against local deployments.
 
 ## Run a storm
 
@@ -28,4 +28,14 @@ The recording lands in `runs/<time>-s<seed>/`: `manifest.json`, `schedule.json` 
 
 After the last bid it waits for the target to announce the close and to release or capture every hold. The command exits non-zero, keeping the recording, if the generator fell behind its schedule, the run stopped early, no bid was accepted or an accepted bid is missing a stage. To run without the proxy (to measure its cost), start the stack without `FAKE_PAYMENTS_URL` and pass `-proxy=false`. It refuses a target or database that isn't on this machine, and a Holdfast that is wired to Stripe.
 
-`make test` runs `go vet` and the tests.
+## Check a recording
+
+Needs [uv](https://docs.astral.sh/uv/), which fetches Python and DuckDB.
+
+```bash
+make check
+```
+
+This takes the newest run (or `RUN=runs/<run>`), writes it to Parquet under `parquet/` in the run folder and checks it: nothing lost, every timeline whole, every accepted bid held before any subscriber heard of it, subscribers told the same things, the fake's record in agreement and the target's own checker passing ([the checks](docs/recording-format.md#conversion-and-checks)). Any failure is listed and exits non-zero. These are evidence from outside the target; the target's checker is the verdict on it, and one run says nothing about how often it would pass.
+
+`make test` and `make lint` cover both the Go and the Python. CI also scans for secrets and runs a small storm against a pinned Holdfast, checks it, then breaks a copy and requires the check to fail.

@@ -116,12 +116,12 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// A 5xx, which the target treats as "outcome unknown", as it would a dead fake.
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadGateway)
-		io.WriteString(w, `{"error":"bad_gateway"}`)
+		_, _ = io.WriteString(w, `{"error":"bad_gateway"}`)
 		return
 	}
 	copyHeader(w.Header(), header)
 	w.WriteHeader(status)
-	w.Write(reply)
+	_, _ = w.Write(reply) // a target that hung up is its own business
 }
 
 func (p *Proxy) forward(r *http.Request, body []byte) (int, http.Header, []byte, error) {
@@ -165,7 +165,7 @@ type exchange struct {
 
 func (p *Proxy) begin(op string, body []byte) exchange {
 	var ex exchange
-	json.Unmarshal(body, &ex) // an unreadable body is recorded with what little it gave
+	_ = json.Unmarshal(body, &ex) // an unreadable body is recorded with what little it gave
 	ex.op = op
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -184,7 +184,7 @@ func (p *Proxy) finish(ex exchange, received, replied time.Time, status int, rep
 		Error     string `json:"error"`
 	}
 	if forwardErr == nil {
-		json.Unmarshal(reply, &answer)
+		_ = json.Unmarshal(reply, &answer) // unreadable: no answer, so ok stays nil
 	}
 	bidID, auctionID, intentID := ex.Metadata.BidID, ex.Metadata.AuctionID, ex.PaymentIntentID
 	if ex.op == "authorize" {

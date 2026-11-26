@@ -19,7 +19,7 @@ A small per-target adapter covers what the contract lacks: creating an auction, 
 - **Subscribers (several):** accepted bids and the close, with `version` and arrival time. A stream event names no bid; the accepted amount identifies it, since amounts strictly increase within an auction.
 
 The proxy and subscribers run inside the generator's process, so one clock times every stage. The target is started with its fake's address pointing at the proxy. Before exiting, a run waits for the close to reach every subscriber and for every hold to be released or captured.
-- **End of run:** the fake's `/audit` and the target checker's verdict.
+- **End of run:** the fake's `/audit` and the target checker's verdict (ADR 0008).
 - **Manifest:** seed, rate, whether the proxy ran, subscriber count, fake settings, target commit, instances, machine, generator version. The fake doesn't report its settings, so they are what the operator declares. The commit is the checkout's, assumed to be what is running. Instances are those seen answering.
 
 ## 4. What the data can claim
@@ -30,7 +30,7 @@ The proxy and subscribers run inside the generator's process, so one clock times
 - **Replay:** the site replays a recording exactly. Re-sending a schedule repeats inputs, not outcomes (timing differs and the fake's faults aren't seeded).
 
 ## 5. Honest measurement
-Sends follow the schedule whether or not replies have returned, and latency counts from the intended send. A run where the generator fell behind is invalid: by default, any send more than 50 ms late, or any send skipped because too many were still waiting for a reply. A recording is also invalid if an accepted bid is missing its hold or an announcement. Repeat and show spread. One machine runs everything, and the site says so. The proxy's cost is measured by running with and without it.
+Sends follow the schedule whether or not replies have returned, and latency counts from the intended send. A run where the generator fell behind is invalid: by default, any send more than 50 ms late, or any send skipped because too many were still waiting for a reply. A recording is also invalid if an accepted bid is missing its hold or an announcement. Valid is about the recording; whether it supports §4 is for the checks, which fail what they can't check (ADR 0008). Repeat and show spread. One machine runs everything, and the site says so. The proxy's cost is measured by running with and without it.
 
 ## 6. Views
 Price staircase with rejected bids beneath; race lanes; latency heatmap and per-bid waterfall; rule-check strip; stream agreement; hold ledger; sweep surfaces; fault view.
