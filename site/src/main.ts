@@ -3,6 +3,7 @@ import { agreement } from './agreement.ts';
 import { acceptedBids, GROUP_NAMES, groupOf, holdOf, money, seconds, type Group, type Storm } from './data.ts';
 import { element, node, table } from './dom.ts';
 import { laneLegend, lanes } from './lanes.ts';
+import { latency } from './latency.ts';
 import { staircase, swatch } from './staircase.ts';
 import { CHECKS, limits, summary } from './words.ts';
 
@@ -45,12 +46,14 @@ function render(storm: Storm): void {
   element('next').addEventListener('click', () => select(current + 1));
   laneLegend(element('lane-legend'));
 
+  let timed: number | null = null; // the bid whose waterfall is showing
   const draw = () => {
     element('staircase').replaceChildren();
     element('agreement').replaceChildren();
     highlight = staircase(element('staircase'), element('tooltip'), storm, select);
     agreement(element('agreement'), element('agreement-words'), storm);
     select(current);
+    latency(storm, timed, (seq) => (timed = seq));
   };
   // Start where the most bids were competing.
   const busiest = accepted.map((a) => storm.bids.filter((b) => b.sent <= a.firstHeard && b.replied >= a.sent).length);

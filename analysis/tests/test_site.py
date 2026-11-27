@@ -38,6 +38,11 @@ def test_bids_holds_and_announcements_are_joined(tmp_path):
     # Seq 2 retried seq 0's key: a send, but no new bid.
     assert [s["seq"] for s in data["other_sends"]] == [2] and data["sends"] == 4
     assert data["close"]["version"] == 4
+    # Bid 1 was told "pending" and polled once.
+    assert (first["http_status"], first["polls"], first["pending_until"]) == (201, 0, None)
+    second = data["bids"][1]
+    assert (second["http_status"], second["polls"]) == (202, 1)
+    assert second["pending_until"] == second["sent"] < second["resolved"]
     assert "b0" not in out.read_text()
 
 

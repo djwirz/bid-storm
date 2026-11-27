@@ -30,7 +30,7 @@ The proxy and subscribers run inside the generator's process, so one clock times
 - **Replay:** the site replays a recording exactly. Re-sending a schedule repeats inputs, not outcomes (timing differs and the fake's faults aren't seeded).
 
 ## 5. Honest measurement
-Sends follow the schedule whether or not replies have returned, and latency counts from the intended send. A run where the generator fell behind is invalid: by default, any send more than 50 ms late, or any send skipped because too many were still waiting for a reply. A recording is also invalid if an accepted bid is missing its hold or an announcement. Valid is about the recording; whether it supports §4 is for the checks, which fail what they can't check (ADR 0008). Repeat and show spread. One machine runs everything, and the site says so. The proxy's cost is measured by running with and without it.
+Sends follow the schedule whether or not replies have returned, and latency counts from the intended send. A run where the generator fell behind is invalid: by default, any send more than 50 ms late, or any send skipped because too many were still waiting for a reply. A recording is also invalid if an accepted bid is missing its hold or an announcement. Valid is about the recording; whether it supports §4 is for the checks, which fail what they can't check (ADR 0008). Repeat and show spread. One machine runs everything, and the site says so. The proxy's cost is measured by running with and without it (done in 2b: `proxy-cost.md`).
 
 ## 6. Views
 Price staircase with rejected bids beneath; race lanes; latency heatmap and per-bid waterfall; rule-check strip; stream agreement; hold ledger; sweep surfaces; fault view.
@@ -52,7 +52,7 @@ Version one ends at 2d. 2a is a fair stopping point.
 
 Checked in 2a: Cloudflare's free limit is 25 MiB per file and the DuckDB-WASM binary was over 30 MiB, so the first views read prepared JSON and in-browser queries wait until a view needs them (ADR 0009).
 
-2a's page shows the rule checks, price staircase, race lanes and stream agreement. The hold ledger goes with the fault view in 2c.
+2a's page shows the rule checks, price staircase, race lanes and stream agreement. The hold ledger goes with the fault view in 2c. 2b adds the latency heatmap and per-bid waterfall to the same page.
 
 ## 8. Later, not designed here
 - **A Stripe fake and a deployed target.** First measure whether the current fake limits throughput. The better case for a new one is fidelity: speaking Stripe's API would load the target's real adapter. Keep it private, set a budget alarm, check host terms.

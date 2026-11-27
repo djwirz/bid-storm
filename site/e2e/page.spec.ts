@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { acceptedBids, type Storm } from '../src/data.ts';
+import { acceptedBids, latencyOf, stages, type Storm } from '../src/data.ts';
 
 const storm = JSON.parse(readFileSync(new URL('../public/data/storm.json', import.meta.url), 'utf8')) as Storm;
 const accepted = acceptedBids(storm);
@@ -24,6 +24,29 @@ test('shows the whole recording with no errors and no accessibility violations',
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   }
   expect(errors).toEqual([]);
+});
+
+test('picks the slowest bid and shows where its time went', async ({ page }) => {
+  await page.goto('/');
+  const slowest = [...storm.bids].sort((a, b) => latencyOf(b) - latencyOf(a))[0]!;
+  await page.locator('#slowest button').first().click();
+  await expect(page.locator('#waterfall caption')).toContainText('answer was lost');
+  // Most of its half a minute was waiting for the target to ask again.
+  const waiting = stages(slowest).find((s) => s.kind === 'waiting')!;
+  expect(waiting.to - waiting.from).toBeGreaterThan(latencyOf(slowest) * 0.9);
+  await expect(page.locator('#waterfall tr[data-kind="waiting"]')).toHaveCount(1);
+  // Even the short calls at the far end have a bar inside their track.
+  const hidden = await page.locator('#waterfall .track').evaluateAll((tracks) =>
+    tracks.filter((t) => t.firstElementChild!.getBoundingClientRect().left >= t.getBoundingClientRect().right).length,
+  );
+  expect(hidden).toBe(0);
+
+  // The same from the keyboard: into the map, over a cell, open it.
+  await page.locator('#heatmap rect[tabindex="0"]').focus();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#cell-title')).toContainText('bids due at');
+  await expect(page.locator('#cell-bids button').first()).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('steps through accepted bids from the keyboard, and fits a phone', async ({ page }) => {

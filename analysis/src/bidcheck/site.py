@@ -41,9 +41,9 @@ def storm(run: Run, results: list[tuple[str, list[str]]]) -> dict:
         run,
         f"""
         WITH said AS (
-            SELECT bid_id, bid_status, reason, replied_us FROM bids WHERE bid_id IS NOT NULL
+            SELECT bid_id, bid_status, reason, sent_us, replied_us FROM bids WHERE bid_id IS NOT NULL
             UNION ALL
-            SELECT bid_id, bid_status, reason, replied_us FROM polls
+            SELECT bid_id, bid_status, reason, sent_us, replied_us FROM polls
             WHERE bid_id IS NOT NULL AND bid_status IS NOT NULL),
         status AS (
             SELECT bid_id,
@@ -52,14 +52,22 @@ def storm(run: Run, results: list[tuple[str, list[str]]]) -> dict:
                 max_by(reason, replied_us) FILTER (reason IS NOT NULL) AS reason,
                 min(replied_us) FILTER (bid_status <> 'pending') AS resolved_us
             FROM said GROUP BY bid_id),
+        -- The outcome came after the last request still answered "pending" was sent.
+        pending AS (
+            SELECT said.bid_id, max(said.sent_us) AS pending_us
+            FROM said JOIN status USING (bid_id)
+            WHERE said.bid_status = 'pending' AND said.sent_us < status.resolved_us
+            GROUP BY said.bid_id),
         first_send AS (
             SELECT * FROM bids WHERE bid_id IS NOT NULL
             QUALIFY row_number() OVER (PARTITION BY bid_id ORDER BY sent_us, seq) = 1)
         SELECT f.bid_id, f.seq, f.bidder, f.amount, s.status,
             CASE WHEN s.status = 'accepted' THEN NULL ELSE s.reason END AS reason,
             f.intended_us - $t0 AS intended, f.sent_us - $t0 AS sent,
-            f.replied_us - $t0 AS replied, s.resolved_us - $t0 AS resolved
-        FROM first_send f JOIN status s USING (bid_id)
+            f.replied_us - $t0 AS replied, s.resolved_us - $t0 AS resolved,
+            f.http_status, (SELECT count(*) FROM polls p WHERE p.seq = f.seq) AS polls,
+            p.pending_us - $t0 AS pending_until
+        FROM first_send f JOIN status s USING (bid_id) LEFT JOIN pending p USING (bid_id)
         ORDER BY f.sent_us, f.seq
         """.replace("$t0", str(int(t0))),
     )
