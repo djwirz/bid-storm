@@ -11,6 +11,9 @@ test('draws every run, invalid ones hollow, with no errors or accessibility viol
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   await page.goto('/');
   await page.getByRole('link', { name: /Sixty storms/ }).click();
+  // The recordings behind the marks are served with the page.
+  const download = await page.request.get('./data/sweep-runs.tar.xz');
+  expect([download.status(), (await download.body()).subarray(0, 6).toString('hex')]).toEqual([200, 'fd377a585a00']);
 
   for (const variable of Object.keys(VARIABLES) as Variable[]) {
     const here = sweepOf(runs, variable).flatMap((s) => s.runs);

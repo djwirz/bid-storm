@@ -121,6 +121,9 @@ It then runs these, writes the results to `checks.json`, and exits 0 if all pass
 | `audit` | The fake holds exactly one intent per accepted bid and no more than one per bid; only the winner's is still held or captured; it agrees with what the proxy saw |
 | `target_verdict` | The target's checker passed, and counts as many accepted bids as the recording |
 
+## Published sets
+`runs/curated/sweep/runs.tar.xz` and `runs/curated/proxy-cost/runs.tar.xz` hold many run folders, each with its raw files (a sweep run also has `sweep.json`: its setting, order, repeat and the load average around it). No Parquet or `checks.json`; `make check RUN=<folder>` remakes them. `make verify-recordings` unpacks both sets and requires the sweep summary and the proxy-cost report to follow from them (ADR 0011). Unpack one with `tar -xJf runs.tar.xz -C <a new folder>`.
+
 ## Not recorded
 Cookies, session tokens, headers, raw bodies, error message text, hostnames, user names and file paths. The price reader's requests (counted only if they fail) and sign-ins. The proxy never reads `userId`, and passes other requests to the fake without recording them.
 
