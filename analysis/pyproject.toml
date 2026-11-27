@@ -10,6 +10,7 @@ bidcheck = "bidcheck.__main__:main"
 bidsite = "bidcheck.site:main"
 bidcost = "bidcheck.cost:main"
 bidsweep = "bidcheck.sweep:main"
+bidarchive = "bidcheck.archive:main"
 
 [dependency-groups]
 dev = ["pytest==9.2.0", "ruff==0.17.6"]

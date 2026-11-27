@@ -1,4 +1,4 @@
-.PHONY: build storm check site-data site test lint
+.PHONY: build storm check site-data site test lint verify-recordings
 
 # The newest recording. Another one: make check RUN=runs/<run>
 RUN ?= $(lastword $(sort $(wildcard runs/2*)))
@@ -21,6 +21,12 @@ STORM ?= runs/curated/first-storm
 site-data:
 	uv run --project analysis --locked bidsite $(STORM) site/public/data/storm.json
 	cp runs/curated/sweep/summary.json site/public/data/sweep.json
+	cp runs/curated/sweep/runs.tar.xz site/public/data/sweep-runs.tar.xz
+	cp runs/curated/proxy-cost/runs.tar.xz site/public/data/proxy-cost-runs.tar.xz
+
+# The published sets of recordings: unpack them and check the published numbers follow.
+verify-recordings:
+	uv run --project analysis --locked bidarchive verify runs/curated
 
 # Builds the page into site/dist. Needs Node 26 and pnpm.
 site: site-data

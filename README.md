@@ -70,9 +70,10 @@ Stop your own stack first; Postgres and Redis stay up. Sixty storms, about an ho
 fnm exec --using=26 -- bash targets/holdfast/sweep.sh
 ```
 
-Then summarize the folder it names into the published file (this replaces it):
+The published runs are in `runs/curated/sweep/runs.tar.xz` (and the proxy measurement's in `runs/curated/proxy-cost/`); `make verify-recordings` checks the published numbers against them. To publish a new sweep, pack and summarize the folder it names (this replaces both):
 
 ```bash
+uv run --project analysis bidarchive pack runs/sweep-<time> runs/curated/sweep/runs.tar.xz
 uv run --project analysis bidsweep runs/sweep-<time> runs/curated/sweep/summary.json
 ```
 

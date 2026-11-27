@@ -46,6 +46,8 @@ jobs:
       - run: uv run --locked ruff check .
       - run: uv run --locked ruff format --check .
       - run: uv run --locked pytest -q
+      # The published recordings, and that the published numbers follow from them.
+      - run: uv run --locked bidarchive verify ../runs/curated
 
   storm:
     name: Small storm, recorded and checked

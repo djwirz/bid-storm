@@ -22,6 +22,8 @@ Reply time with the proxy minus without it, per pair, in whole milliseconds:
 - The slowest one reply in a hundred swung by tens of milliseconds in both directions and says nothing.
 - One run under the default settings was invalid (a send went out later than the 50 ms limit), so its pair is left out.
 
+The twenty runs behind the table are in [`runs/curated/proxy-cost/`](../runs/curated/proxy-cost/), with each run's figures in `report.md`.
+
 ## What this doesn't show
 - Anything about a loaded or deployed setup, or higher bid rates.
 - The time each card call spends in the proxy: without the proxy nothing records card calls, so only the bidder's reply time can be compared.

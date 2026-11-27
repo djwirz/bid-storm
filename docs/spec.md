@@ -48,7 +48,7 @@ Each ends before the next starts.
 | 2c | Failures and recovery | Each injected fault type has a visible story |
 | 2d | Sweeps over rate, hold delay, decline rate | A sweep page with spread and a short finding, including what it doesn't show |
 
-Version one ends at 2d. 2a is a fair stopping point. 2d is built: sixty storms, a page at `sweeps.html`, and per-run summaries as its data (ADR 0010).
+Version one ends at 2d. 2a is a fair stopping point. 2d is built: sixty storms, a page at `sweeps.html`, and per-run summaries as its data and the runs themselves published packed (ADR 0011).
 
 Checked in 2a: Cloudflare's free limit is 25 MiB per file and the DuckDB-WASM binary was over 30 MiB, so the first views read prepared JSON and in-browser queries wait until a view needs them (ADR 0009).
 
