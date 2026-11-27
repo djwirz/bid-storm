@@ -34,13 +34,19 @@ stop_stack() {
 trap stop_stack EXIT
 
 run_one() { # fake-env-file proxy(true|false)
-  local file=$1 proxy=$2 url=
-  [ "$proxy" = true ] && url=http://127.0.0.1:4011
+  local file=$1 proxy=$2
   (
     set -a
     . "$file"
     set +a
-    FAKE_PAYMENTS_URL="$url" exec bash "$HOLDFAST_DIR/load/stack.sh"
+    # Without the proxy the variable must be unset, not empty: Holdfast reads an empty one as
+    # "no shared fake" and quietly uses a private one with its own wait and no faults.
+    if [ "$proxy" = true ]; then
+      export FAKE_PAYMENTS_URL=http://127.0.0.1:4011
+    else
+      unset FAKE_PAYMENTS_URL
+    fi
+    exec bash "$HOLDFAST_DIR/load/stack.sh"
   ) >>"$OUT/stack.log" 2>&1 &
   stack=$!
   for _ in $(seq 60); do
@@ -49,7 +55,7 @@ run_one() { # fake-env-file proxy(true|false)
   done
   # A fresh server is slow at first, so a short storm goes first and is thrown away.
   ./bin/bidstorm -holdfast "$HOLDFAST_DIR" -fake-env "$file" -proxy="$proxy" \
-    -duration 3s -auction 2s -out "$OUT/warmup" >/dev/null || true
+    -duration 3s -auction 2s -out "$OUT/warmup" >/dev/null 2>&1 || true
   # An unusable run is kept: the summary reports it.
   ./bin/bidstorm -holdfast "$HOLDFAST_DIR" -fake-env "$file" -proxy="$proxy" -out "$OUT" |
     grep -E "INVALID|recording:" || true

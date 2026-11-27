@@ -2,7 +2,8 @@
 
 Latency is each bid POST's reply, counted from its intended send (spec §5). Runs are grouped
 by the fake's declared settings and paired in the order they started: one with the proxy and
-one without. An invalid run is reported and its pair left out.
+one without. A run is left out, with its pair, if it is invalid, the target's checker didn't pass,
+or the shared fake holds nothing for it (the target was paying somewhere else).
 """
 
 import argparse
@@ -26,9 +27,20 @@ def measure(folder: Path) -> dict:
         "started_us": manifest["started_us"],
         "setting": f"fake waits {declared.get('FAKE_LATENCY_MS', '?')} ms",
         "proxy": manifest["settings"]["proxy"],
-        "valid": manifest["valid"],
+        "problem": problem(run),
         "latency_ms": dict(zip(MEASURES, values, strict=True)),
     }
+
+
+def problem(run: Run) -> str | None:
+    """Why a run can't be compared, or None."""
+    if not run.manifest["valid"]:
+        return "invalid"
+    if run.check is None or run.check["exit_code"] != 0:
+        return "checker did not pass"
+    if not (run.audit or {}).get("intents"):
+        return "shared fake not used"
+    return None
 
 
 def pairs(runs: list[dict]) -> list[tuple[dict, dict]]:
@@ -36,7 +48,7 @@ def pairs(runs: list[dict]) -> list[tuple[dict, dict]]:
     ordered = sorted(runs, key=lambda r: r["started_us"])
     out = []
     for first, second in zip(ordered[::2], ordered[1::2], strict=False):
-        if first["proxy"] != second["proxy"] and first["valid"] and second["valid"]:
+        if first["proxy"] != second["proxy"] and not first["problem"] and not second["problem"]:
             out.append((first, second) if first["proxy"] else (second, first))
     return out
 
@@ -48,7 +60,7 @@ def report(runs: list[dict]) -> str:
         lines += [f"## {setting}", "", "| Run | Proxy | " + " | ".join(f"{m} ms" for m in MEASURES) + " |"]
         lines.append("|---|---|" + "---|" * len(MEASURES))
         for r in sorted(group, key=lambda r: r["started_us"]):
-            note = "" if r["valid"] else " (invalid)"
+            note = f" ({r['problem']})" if r["problem"] else ""
             values = " | ".join(f"{r['latency_ms'][m]:.1f}" for m in MEASURES)
             lines.append(f"| {r['id']}{note} | {'on' if r['proxy'] else 'off'} | {values} |")
         usable = pairs(group)
