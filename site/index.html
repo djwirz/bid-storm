@@ -66,6 +66,28 @@
         <div id="agreement" class="chart scroll"></div>
       </section>
 
+      <section aria-labelledby="time-title">
+        <h2 id="time-title">Where the time went</h2>
+        <p class="note">
+          Time from when a bid was due until a reply showed its outcome. Seen from outside the target, so a wait
+          for a database lock can’t be told apart from other work. A bid answered “pending” is polled twice a
+          second, so its outcome is known only to within that.
+        </p>
+        <div class="scroll" id="path-table"></div>
+        <h3>Every bid, by when it was due and how long it took</h3>
+        <p class="note">
+          Darker means more bids. Rows are not equal steps: they are finer where most bids fall. Pick a cell to
+          list its bids, or start with the slowest.
+        </p>
+        <div id="heatmap" class="chart scroll"></div>
+        <h3>Slowest bids</h3>
+        <div id="slowest" class="picks"></div>
+        <h3 id="cell-title">No cell picked yet</h3>
+        <div id="cell-bids" class="picks"></div>
+        <h3>Waterfall</h3>
+        <div id="waterfall" class="scroll" aria-live="polite"></div>
+      </section>
+
       <section aria-labelledby="table-title">
         <h2 id="table-title">Every accepted bid</h2>
         <details>

@@ -62,7 +62,10 @@ export function limits(storm: Storm): string[] {
     `Load generator, target (${run.instances} instances), payment fake, database and subscribers all shared one ` +
       `${run.cpus}-core laptop. Nothing here is a network or capacity measurement.`,
     `Card holds go to a fake that waits ${latency ?? 'an unstated'} ms before answering, as declared by whoever ` +
-      'started it. That wait is most of the latency you see.',
+      'started it. That wait is most of a typical bid’s time.',
     'Everything is observed from outside the target. Time spent waiting on a database lock can’t be told apart.',
+    'Card holds pass through a recording proxy. In separate runs with and without it on this laptop, its effect on ' +
+      'reply times could not be told apart from run-to-run noise; against a fake that answers at once, typical ' +
+      'replies moved by a few milliseconds at most.',
   ];
 }
