@@ -20,6 +20,7 @@ check:
 STORM ?= runs/curated/first-storm
 site-data:
 	uv run --project analysis --locked bidsite $(STORM) site/public/data/storm.json
+	cp runs/curated/sweep/summary.json site/public/data/sweep.json
 
 # Builds the page into site/dist. Needs Node 26 and pnpm.
 site: site-data

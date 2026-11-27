@@ -104,3 +104,9 @@ button[aria-pressed='true'] { border-color: var(--text); box-shadow: 0 0 0 1px v
 .held-area { fill: var(--blue); }
 .maybe-area { fill: var(--orange); }
 .key.hold-maybe { height: 0.6rem; background: var(--orange); }
+.charts { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); }
+figure { margin: 0; min-width: 0; }
+figcaption { font-weight: 600; font-size: 0.95rem; }
+.middle { stroke: var(--text); stroke-width: 2; }
+.run.mark.price { fill-opacity: 1; }
+.run.invalid { fill: var(--surface) !important; stroke: var(--text); stroke-width: 1.5; }
