@@ -133,7 +133,7 @@ def storm(run: Run, results: list[tuple[str, list[str]]]) -> dict:
     for send in others:
         send["bid"] = seq_of.get(send.pop("bid_id"))
     # What the fake itself says became of its holds.
-    ended = [intent["status"] for intent in run.audit["intents"]]
+    ended = [intent["status"] for intent in (run.audit or {}).get("intents", [])]
     fake = {
         "placed": len(ended),
         "released": ended.count("canceled"),

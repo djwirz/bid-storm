@@ -1,4 +1,7 @@
 import { defineConfig } from 'vite';
 
 // Relative asset paths, so the build works at any URL.
-export default defineConfig({ base: './' });
+export default defineConfig({
+  base: './',
+  build: { rolldownOptions: { input: ['index.html', 'sweeps.html'] } },
+});

@@ -33,3 +33,17 @@ export function table(caption: string, head: string[], rows: string[][]): HTMLTa
   }
   return made;
 }
+
+/**
+ * Lets the keyboard reach every box that scrolls sideways, naming it by the heading above it.
+ * Boxes filled later are covered: the attributes sit on the box, not its contents.
+ */
+export function focusableScrollBoxes(): void {
+  for (const box of document.querySelectorAll<HTMLElement>('.scroll')) {
+    const section = box.closest('section, article');
+    const heading = section?.querySelector('h2, h3')?.textContent ?? 'Wide content';
+    box.tabIndex = 0;
+    box.setAttribute('role', 'group');
+    box.setAttribute('aria-label', `${heading}: scrolls sideways`);
+  }
+}

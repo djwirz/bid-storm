@@ -1,7 +1,7 @@
 import './style.css';
 import { agreement } from './agreement.ts';
 import { acceptedBids, GROUP_NAMES, groupOf, holdOf, money, seconds, type Group, type Storm } from './data.ts';
-import { element, node, table } from './dom.ts';
+import { element, focusableScrollBoxes, node, table } from './dom.ts';
 import { laneLegend, lanes } from './lanes.ts';
 import { faults } from './faults.ts';
 import { latency } from './latency.ts';
@@ -84,6 +84,7 @@ function render(storm: Storm): void {
     ),
   );
   element('limits').replaceChildren(...limits(storm).map((text) => node('li', text)));
+  focusableScrollBoxes();
 }
 
 async function load(): Promise<void> {

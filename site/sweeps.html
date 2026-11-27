@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Sixty bid storms: what changes with request rate, card hold delay and decline rate, and how much runs vary." />
+    <title>bid-storm: sweeps</title>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p><a href="./">← Anatomy of one storm</a></p>
+        <h1>Sixty storms</h1>
+        <p>
+          One thing changed at a time from the usual setting (50 bids a second, holds taking 150 to 500 ms, 3 cards in
+          100 declined), five runs at each value, on one laptop.
+        </p>
+      </header>
+
+      <section aria-labelledby="finding-title">
+        <h2 id="finding-title">What came out</h2>
+        <ul>
+          <li>
+            <strong>Slower card holds, fewer accepted bids.</strong> About 110 with an instant answer, about 65 at 50 to
+            150 ms, about 35 to 40 at the usual setting and about 18 at 500 to 1500 ms. Runs at each value stayed fairly
+            close together.
+          </li>
+          <li>
+            <strong>Request rate mattered too, more than guessed.</strong> The guess written down before running was
+            that hold delay would matter much more than rate. From 10 to 50 bids a second, accepted bids rose from about
+            20 to about 35 to 40. At 100, runs ranged from about 20 to 45. At 200 and 300, replies took seconds and
+            fewer than 15 bids were accepted.
+          </li>
+          <li>
+            <strong>Declined cards made less difference.</strong> The middle drifted from about 40 accepted with none
+            declined to about 30 with half declined, but the runs overlap.
+          </li>
+          <li>
+            <strong>Every valid run passed every check.</strong> That is 58 of 60. The other two are invalid (one skipped
+            sends at 300 a second, one sent a bid late) and are drawn hollow and left out of the middle values.
+          </li>
+        </ul>
+      </section>
+
+      <section aria-labelledby="limits-title">
+        <h2 id="limits-title">What this doesn’t show</h2>
+        <ul>
+          <li>
+            Not the target’s capacity. The generator, two target instances, the payment fake, the database and the
+            subscribers shared one busy 8-core laptop (load average up to about 15), so the slowdown at high rates is the
+            laptop’s as much as anything.
+          </li>
+          <li>
+            Accepted counts depend on how these bidders behave: they read the price every tenth of a second and bid just
+            above it, in an 8-second auction. Real bidders needn’t.
+          </li>
+          <li>
+            Typical reply time mixes bids that needed a card hold with bids refused without one, so it can jump between
+            runs. The slow reply time is steadier.
+          </li>
+          <li>Five runs a value is a small sample, and nothing here tests two variables changing together.</li>
+          <li>The raw recordings of these runs are not published; only a summary of each is.</li>
+        </ul>
+      </section>
+
+      <p class="note">
+        Every run is a mark; the bar is the middle of the valid ones. Hollow marks are invalid runs. Values along the
+        bottom are evenly spaced, not to scale.
+      </p>
+      <ul id="legend" class="legend"></ul>
+      <div id="sweeps">Loading the sweep…</div>
+      <p>
+        Code, summary and method: <a href="https://github.com/djwirz/bid-storm">github.com/djwirz/bid-storm</a>.
+        Synthetic users and auctions only.
+      </p>
+    </main>
+    <script type="module" src="/src/sweeps.ts"></script>
+  </body>
+</html>

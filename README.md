@@ -8,7 +8,7 @@ The question the data should answer on sight: many bids land at once, they get o
 
 One recorded storm on one laptop, against a local Holdfast and its payment fake. Dig into it at [bid-storm.pages.dev](https://bid-storm.pages.dev).
 
-**Status:** slice 2c. A storm against a local Holdfast is recorded end to end, converted, checked, and shown on a static page built from one published recording. CI tests it all and deploys the page from `main`. The page includes where each bid's time went, and the recording proxy's cost has been [measured](docs/proxy-cost.md). Each injected fault has a story there, with a ledger of the holds. Next is sweeps over rate, hold delay and decline rate. Design: [docs/spec.md](docs/spec.md) and [docs/adr/](docs/adr/). Synthetic users and auctions only, against local deployments.
+**Status:** version one (slices 1a to 2d). A storm against a local Holdfast is recorded end to end, converted, checked, and shown on a static page built from one published recording. CI tests it all and deploys the page from `main`. The page includes where each bid's time went, and the recording proxy's cost has been [measured](docs/proxy-cost.md). Each injected fault has a story there, with a ledger of the holds. A second page shows [sweeps](https://bid-storm.pages.dev/sweeps.html) over request rate, hold delay and decline rate. Design: [docs/spec.md](docs/spec.md) and [docs/adr/](docs/adr/). Synthetic users and auctions only, against local deployments.
 
 ## Run a storm
 
@@ -61,6 +61,22 @@ Stop your own stack first; Postgres and Redis stay up. It restarts the stack bef
 ```bash
 fnm exec --using=26 -- bash targets/holdfast/proxy-cost.sh
 ```
+
+## Sweep
+
+Stop your own stack first; Postgres and Redis stay up. Sixty storms, about an hour and a half on an otherwise idle machine. Needs `jq` as well as the above.
+
+```bash
+fnm exec --using=26 -- bash targets/holdfast/sweep.sh
+```
+
+Then summarize the folder it names into the published file (this replaces it):
+
+```bash
+uv run --project analysis bidsweep runs/sweep-<time> runs/curated/sweep/summary.json
+```
+
+The page's written finding (`site/sweeps.html`) is held to the summary by tests, so new numbers may need new words.
 
 ## Tests
 

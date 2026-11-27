@@ -86,4 +86,7 @@ test('steps through accepted bids from the keyboard, and fits a phone', async ({
   await expect(page.locator('#lanes .lane.selected')).toHaveCount(1);
   // The page itself never scrolls sideways; wide charts scroll in their own box.
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+  // Narrow screens are where tables overflow, so scan there too.
+  for (const details of await page.locator('details').all()) await details.locator('summary').click();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 });
