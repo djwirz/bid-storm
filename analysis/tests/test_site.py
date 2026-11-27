@@ -13,7 +13,14 @@ def complete(run):
     """What the data step needs beyond what the checks read."""
     run.manifest.update(
         started_us=0,
-        schedule={"seed": 1, "rate_per_second": 4, "duration_us": 1000, "bidders": 4},
+        schedule={
+            "seed": 1,
+            "rate_per_second": 4,
+            "duration_us": 1000,
+            "bidders": 4,
+            "retry_rate": 0.1,
+            "conflict_rate": 0.3,
+        },
         machine={"cpus": 2},
     )
     run.manifest["settings"]["auction_seconds"] = 1
@@ -37,6 +44,8 @@ def test_bids_holds_and_announcements_are_joined(tmp_path):
     assert len(first["heard"]) == 2 and first["holds"][0]["replied"] < min(first["heard"])
     # Seq 2 retried seq 0's key: a send, but no new bid.
     assert [s["seq"] for s in data["other_sends"]] == [2] and data["sends"] == 4
+    assert (data["other_sends"][0]["bid"], data["other_sends"][0]["changed"]) == (0, False)
+    assert data["fake"] == {"placed": 2, "released": 1, "captured": 1, "held": 0}
     assert data["close"]["version"] == 4
     # Bid 1 was told "pending" and polled once.
     assert (first["http_status"], first["polls"], first["pending_until"]) == (201, 0, None)

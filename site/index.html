@@ -88,6 +88,34 @@
         <div id="waterfall" class="scroll" aria-live="polite"></div>
       </section>
 
+      <section aria-labelledby="faults-title">
+        <h2 id="faults-title">When things went wrong</h2>
+        <p class="note">
+          Faults were put in on purpose: some by the payment fake, some by the load generator. An instance dying,
+          a live stream dropping and a release or capture failing for good were not injected, so this says nothing
+          about them.
+        </p>
+        <div id="faults" class="faults"></div>
+      </section>
+
+      <section aria-labelledby="ledger-title">
+        <h2 id="ledger-title">Hold ledger</h2>
+        <p class="note">
+          Cards held at each moment. “Possibly held” is the stretch after a lost answer: the hold existed or not,
+          and the proxy learned which only when the target asked again.
+        </p>
+        <ul class="legend">
+          <li><span class="key hold-ok" aria-hidden="true"></span>held</li>
+          <li><span class="key hold-maybe" aria-hidden="true"></span>possibly held</li>
+        </ul>
+        <div id="ledger" class="chart"></div>
+        <div id="ledger-totals" class="scroll"></div>
+        <details>
+          <summary>Holds open at each second</summary>
+          <div class="scroll" id="ledger-table"></div>
+        </details>
+      </section>
+
       <section aria-labelledby="table-title">
         <h2 id="table-title">Every accepted bid</h2>
         <details>

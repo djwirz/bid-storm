@@ -3,7 +3,9 @@ import { agreement } from './agreement.ts';
 import { acceptedBids, GROUP_NAMES, groupOf, holdOf, money, seconds, type Group, type Storm } from './data.ts';
 import { element, node, table } from './dom.ts';
 import { laneLegend, lanes } from './lanes.ts';
+import { faults } from './faults.ts';
 import { latency } from './latency.ts';
+import { holdLedger } from './ledger.ts';
 import { staircase, swatch } from './staircase.ts';
 import { CHECKS, limits, summary } from './words.ts';
 
@@ -42,6 +44,7 @@ function render(storm: Storm): void {
     highlight(current);
     lanes(element('lanes'), element('lane-table'), storm, bid);
   };
+  faults(storm); // not redrawn on resize, so an opened example stays put
   element('previous').addEventListener('click', () => select(current - 1));
   element('next').addEventListener('click', () => select(current + 1));
   laneLegend(element('lane-legend'));
@@ -54,6 +57,7 @@ function render(storm: Storm): void {
     agreement(element('agreement'), element('agreement-words'), storm);
     select(current);
     latency(storm, timed, (seq) => (timed = seq));
+    holdLedger(storm);
   };
   // Start where the most bids were competing.
   const busiest = accepted.map((a) => storm.bids.filter((b) => b.sent <= a.firstHeard && b.replied >= a.sent).length);

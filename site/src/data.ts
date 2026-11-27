@@ -28,6 +28,19 @@ export interface Bid {
   holds: Hold[];
 }
 
+/** A send that made no new bid: a repeat answered with the original, or one refused. */
+export interface Send {
+  seq: number;
+  retry_of: number | null;
+  amount: number;
+  http_status: number | null;
+  error_code: string | null;
+  changed: boolean;
+  bid: number | null; // seq of the bid it got back
+  sent: number;
+  replied: number;
+}
+
 export interface Storm {
   run: {
     id: string;
@@ -41,6 +54,8 @@ export interface Storm {
     duration_us: number;
     auction_seconds: number;
     bidders: number;
+    retry_rate: number;
+    conflict_rate: number;
     subscribers: number;
     cpus: number;
     send_lag_max_us: number;
@@ -49,7 +64,8 @@ export interface Storm {
   peak_in_flight: number;
   checks: { name: string; passed: boolean }[];
   bids: Bid[];
-  other_sends: { seq: number; retry_of: number | null; amount: number; sent: number; replied: number }[];
+  other_sends: Send[];
+  fake: { placed: number; released: number; captured: number; held: number };
   close: { version: number; amount: number | null; heard: (number | null)[] };
 }
 
@@ -202,4 +218,159 @@ export function stages(bid: Bid): Stage[] {
     out.push({ kind: 'later', label: `After the outcome was known. ${callStage(call).label}`, from: call.received, to: call.replied });
   }
   return out;
+}
+
+// What went wrong, and what became of the holds.
+
+export type Fault = 'declined' | 'provider' | 'lost' | 'release' | 'retried' | 'conflict';
+
+export interface Step {
+  at: number;
+  what: string;
+}
+
+export interface Example {
+  title: string;
+  steps: Step[];
+  bid: Bid | null;
+}
+
+const HOLD_VERBS = { authorize: 'to hold the card', cancel: 'to release the hold', capture: 'to take the money' };
+
+function holdSteps(hold: Hold): Step[] {
+  const answer =
+    hold.ok === true
+      ? 'Yes'
+      : hold.ok === false
+        ? `No: ${hold.reason ?? 'no reason given'}`
+        : `No answer (HTTP ${hold.http_status ?? 'none'})`;
+  return [
+    { at: hold.received, what: `The target asks the fake ${HOLD_VERBS[hold.op]}` },
+    { at: hold.replied, what: answer },
+  ];
+}
+
+const REASONS: Record<string, string> = {
+  below_minimum: 'too low',
+  ended: 'the auction had ended',
+  card_declined: 'the card was declined',
+  processing_error: 'a processing error',
+};
+
+/** Everything recorded about one bid, in time order. */
+export function story(bid: Bid): Step[] {
+  const steps: Step[] = [{ at: bid.sent, what: `Bidder ${bid.bidder} sends ${money(bid.amount)}` }];
+  steps.push(...bid.holds.flatMap(holdSteps));
+  if (bid.http_status === 202) steps.push({ at: bid.replied, what: 'The bidder is told “pending”' });
+  const outcome =
+    bid.status === 'accepted'
+      ? `accepted as version ${bid.version}`
+      : `not accepted, ${REASONS[bid.reason ?? ''] ?? bid.reason ?? 'no reason given'}`;
+  steps.push({ at: bid.resolved ?? bid.replied, what: `The bidder learns the outcome: ${outcome}` });
+  return steps.sort((a, b) => a.at - b.at);
+}
+
+const bidExample = (bid: Bid): Example => ({
+  title: `${money(bid.amount)} by bidder ${bid.bidder}`,
+  steps: story(bid),
+  bid,
+});
+
+const answered = (bid: Bid, reason: string) => bid.holds.some((h) => h.op === 'authorize' && h.reason === reason);
+
+function sendExample(storm: Storm, send: Send): Example {
+  // The bid whose key was reused: the one returned, or the one the refused send retried.
+  const original = storm.bids.find((b) => b.seq === (send.bid ?? send.retry_of));
+  const result =
+    send.bid !== null
+      ? 'It gets back the original bid'
+      : `It is refused (HTTP ${send.http_status ?? 'none'}${send.error_code ? `, ${send.error_code}` : ''})`;
+  const steps = [
+    ...(original ? story(original) : []),
+    { at: send.sent, what: `The same key is sent again, offering ${money(send.amount)}` },
+    { at: send.replied, what: result },
+  ].sort((a, b) => a.at - b.at);
+  return { title: `${money(send.amount)}, reusing a key`, steps, bid: original ?? null };
+}
+
+/** The recorded cases of one kind of fault, in the order they were sent. */
+export function examples(storm: Storm, fault: Fault): Example[] {
+  const bids = (test: (b: Bid) => boolean) => storm.bids.filter(test).map(bidExample);
+  switch (fault) {
+    case 'declined':
+      return bids((b) => answered(b, 'card_declined'));
+    case 'provider':
+      return bids((b) => answered(b, 'processing_error'));
+    case 'lost':
+      return bids((b) => pathOf(b) === 'lost');
+    case 'release':
+      return bids((b) => b.holds.some((h) => h.op === 'cancel' && h.ok === false));
+    case 'retried':
+      return storm.other_sends.filter((s) => s.bid !== null).map((s) => sendExample(storm, s));
+    case 'conflict':
+      return storm.other_sends.filter((s) => s.http_status === 422).map((s) => sendExample(storm, s));
+  }
+}
+
+export interface Held {
+  /** A call's answer was lost: from then, a hold may exist that the target doesn't know of. */
+  maybeFrom: number | null;
+  placed: number | null;
+  released: number | null;
+  captured: number | null;
+}
+
+/** When a bid's hold was placed and what ended it, as the proxy saw. */
+export function heldFor(bid: Bid): Held {
+  const first = (op: Hold['op'], ok: boolean | null) =>
+    bid.holds
+      .filter((h) => h.op === op && h.ok === ok)
+      .map((h) => h.replied)
+      .sort((a, b) => a - b)[0] ?? null;
+  return {
+    maybeFrom: first('authorize', null),
+    placed: first('authorize', true),
+    released: first('cancel', true),
+    captured: first('capture', true),
+  };
+}
+
+export interface Level {
+  at: number;
+  held: number; // holds the proxy has seen placed and not yet ended
+  maybe: number; // possibly held: the answer was lost and not yet repeated
+}
+
+export interface Ledger {
+  levels: Level[];
+  placed: number;
+  released: number;
+  captured: number;
+}
+
+export function ledger(storm: Storm): Ledger {
+  const changes: { at: number; held: number; maybe: number }[] = [];
+  const totals = { placed: 0, released: 0, captured: 0 };
+  for (const bid of storm.bids) {
+    const h = heldFor(bid);
+    if (h.placed === null) continue;
+    totals.placed++;
+    if (h.maybeFrom !== null && h.maybeFrom < h.placed) {
+      changes.push({ at: h.maybeFrom, held: 0, maybe: 1 }, { at: h.placed, held: 1, maybe: -1 });
+    } else {
+      changes.push({ at: h.placed, held: 1, maybe: 0 });
+    }
+    const ended = h.released ?? h.captured;
+    if (h.released !== null) totals.released++;
+    else if (h.captured !== null) totals.captured++;
+    if (ended !== null) changes.push({ at: ended, held: -1, maybe: 0 });
+  }
+  const levels: Level[] = [{ at: 0, held: 0, maybe: 0 }];
+  for (const change of changes.sort((a, b) => a.at - b.at)) {
+    const last = levels.at(-1)!;
+    const next = { at: change.at, held: last.held + change.held, maybe: last.maybe + change.maybe };
+    if (last.at === next.at) levels[levels.length - 1] = next;
+    else levels.push(next);
+  }
+  return { levels, ...totals };
 }

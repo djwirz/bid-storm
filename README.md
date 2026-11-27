@@ -8,7 +8,7 @@ The question the data should answer on sight: many bids land at once, they get o
 
 One recorded storm on one laptop, against a local Holdfast and its payment fake. Dig into it at [bid-storm.pages.dev](https://bid-storm.pages.dev).
 
-**Status:** slice 2b. A storm against a local Holdfast is recorded end to end, converted, checked, and shown on a static page built from one published recording. CI tests it all and deploys the page from `main`. The page includes where each bid's time went, and the recording proxy's cost has been [measured](docs/proxy-cost.md). Next is failures and recovery. Design: [docs/spec.md](docs/spec.md) and [docs/adr/](docs/adr/). Synthetic users and auctions only, against local deployments.
+**Status:** slice 2c. A storm against a local Holdfast is recorded end to end, converted, checked, and shown on a static page built from one published recording. CI tests it all and deploys the page from `main`. The page includes where each bid's time went, and the recording proxy's cost has been [measured](docs/proxy-cost.md). Each injected fault has a story there, with a ledger of the holds. Next is sweeps over rate, hold delay and decline rate. Design: [docs/spec.md](docs/spec.md) and [docs/adr/](docs/adr/). Synthetic users and auctions only, against local deployments.
 
 ## Run a storm
 
