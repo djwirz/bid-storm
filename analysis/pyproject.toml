@@ -9,6 +9,7 @@ dependencies = ["duckdb==2.0.1"]
 bidcheck = "bidcheck.__main__:main"
 bidsite = "bidcheck.site:main"
 bidcost = "bidcheck.cost:main"
+bidsweep = "bidcheck.sweep:main"
 
 [dependency-groups]
 dev = ["pytest==9.2.0", "ruff==0.17.6"]
