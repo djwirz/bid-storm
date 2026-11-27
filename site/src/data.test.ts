@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { acceptedBids, delays, groupOf, holdOf, latencyOf, millis, pathOf, raceWindow, stages, type Bid, type Hold, type Storm } from './data.ts';
+import { acceptedBids, delays, examples, groupOf, holdOf, latencyOf, ledger, millis, pathOf, raceWindow, stages, type Bid, type Hold, type Send, type Storm } from './data.ts';
 import { cells, rowOf } from './latency.ts';
 
 function bid(seq: number, over: Partial<Bid> = {}): Bid {
@@ -131,5 +131,65 @@ describe('where the time went', () => {
     const found = cells([bid(1, { resolved: 1_200 }), bid(2, { resolved: 2_900 }), lost]);
     expect(found.flatMap((c) => c.bids)).toHaveLength(3);
     expect(found.find((c) => c.bids.length === 2)?.bids.map((b) => b.seq)).toEqual([2, 1]);
+  });
+});
+
+describe('what went wrong', () => {
+  const hold = (op: Hold['op'], replied: number, ok: boolean | null, reason: string | null = null): Hold => ({
+    op,
+    received: replied - 5,
+    replied,
+    ok,
+    reason,
+    http_status: ok === null ? 503 : 200,
+  });
+  const send = (seq: number, over: Partial<Send>): Send => ({
+    seq,
+    retry_of: 1,
+    amount: 1100,
+    http_status: 201,
+    error_code: null,
+    changed: false,
+    bid: 1,
+    sent: 2000,
+    replied: 2100,
+    ...over,
+  });
+  const storm = {
+    bids: [
+      bid(1, { holds: [hold('authorize', 100, true), hold('cancel', 200, false, 'rate_limited'), hold('cancel', 900, true)] }),
+      bid(2, { holds: [hold('authorize', 50, false, 'card_declined')] }),
+      bid(3, { holds: [hold('authorize', 150, null), hold('authorize', 400, true), hold('cancel', 500, true)] }),
+      won(4, 1, { holds: [hold('authorize', 300, true), hold('capture', 1000, true)] }),
+    ],
+    other_sends: [
+      send(5, {}),
+      send(6, { bid: null, changed: true, http_status: 422, error_code: 'idempotency_conflict' }),
+    ],
+  } as Storm;
+
+  it('finds the cases of each fault', () => {
+    const found = (['declined', 'provider', 'lost', 'release', 'retried', 'conflict'] as const).map(
+      (f) => examples(storm, f).length,
+    );
+    expect(found).toEqual([1, 0, 1, 1, 1, 1]);
+    const [conflict] = examples(storm, 'conflict');
+    expect(conflict!.steps.map((s) => s.at)).toEqual([...conflict!.steps.map((s) => s.at)].sort((a, b) => a - b));
+    expect(conflict!.steps.some((s) => s.what.includes('idempotency_conflict'))).toBe(true);
+  });
+
+  it('keeps a ledger that marks a hold as possible until the proxy sees it placed', () => {
+    const { levels, ...totals } = ledger(storm);
+    expect(totals).toEqual({ placed: 3, released: 2, captured: 1 });
+    expect(levels.map((l) => [l.at, l.held, l.maybe])).toEqual([
+      [0, 0, 0],
+      [100, 1, 0],
+      [150, 1, 1],
+      [300, 2, 1],
+      [400, 3, 0],
+      [500, 2, 0],
+      [900, 1, 0],
+      [1000, 0, 0],
+    ]);
   });
 });

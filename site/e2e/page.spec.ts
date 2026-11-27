@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { acceptedBids, latencyOf, stages, type Storm } from '../src/data.ts';
+import { acceptedBids, examples, latencyOf, ledger, stages, type Storm } from '../src/data.ts';
 
 const storm = JSON.parse(readFileSync(new URL('../public/data/storm.json', import.meta.url), 'utf8')) as Storm;
 const accepted = acceptedBids(storm);
@@ -47,6 +47,31 @@ test('picks the slowest bid and shows where its time went', async ({ page }) => 
   await page.keyboard.press('Enter');
   await expect(page.locator('#cell-title')).toContainText('bids due at');
   await expect(page.locator('#cell-bids button').first()).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('gives every injected fault a story, and a ledger that agrees with the fake', async ({ page }) => {
+  await page.goto('/');
+  const kinds = ['declined', 'provider', 'lost', 'release', 'retried', 'conflict'] as const;
+  for (const fault of kinds) {
+    const card = page.locator(`#fault-${fault}`);
+    const cases = examples(storm, fault);
+    expect(cases.length, fault).toBeGreaterThan(0);
+    await expect(card.locator('.seen')).toHaveText(`Seen ${cases.length} times.`);
+    await card.locator('summary').click();
+    await expect(card.locator('tbody tr')).toHaveCount(cases[0]!.steps.length);
+    await card.getByRole('button', { name: /^Next/ }).click();
+    await expect(card.locator('output')).toHaveText(`Example 2 of ${cases.length}`);
+  }
+
+  const totals = ledger(storm);
+  expect([totals.placed, totals.released, totals.captured]).toEqual([storm.fake.placed, storm.fake.released, storm.fake.captured]);
+  expect(totals.levels.at(-1)).toMatchObject({ held: storm.fake.held, maybe: 0 });
+  const rows = page.locator('#ledger-totals tbody tr');
+  const numbers = [storm.fake.placed, storm.fake.released, storm.fake.captured, storm.fake.held].map(String);
+  await expect(rows.nth(0).locator('td')).toHaveText(['Proxy', ...numbers]);
+  await expect(rows.nth(1).locator('td')).toHaveText(['Fake’s record', ...numbers]);
+
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 });
 
 test('steps through accepted bids from the keyboard, and fits a phone', async ({ page }) => {

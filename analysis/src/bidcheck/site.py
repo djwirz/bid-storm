@@ -115,20 +115,31 @@ def storm(run: Run, results: list[tuple[str, list[str]]]) -> dict:
             bid["holds"].append(hold)
 
     # Sends that made no new bid: retries answered with the original, and refusals.
+    # `bid` is the seq of the bid a send got back, if any; `changed`, whether the schedule
+    # meant it to offer a different amount from the send whose key it reused.
     first_seqs = {bid["seq"] for bid in bids}
-    others = [
-        send
-        for send in records(
-            run,
-            """
-            SELECT seq, retry_of, amount, http_status, error_code,
-                sent_us - ? AS sent, replied_us - ? AS replied FROM bids ORDER BY sent_us, seq
-            """,
-            t0,
-            t0,
-        )
-        if send["seq"] not in first_seqs
-    ]
+    seq_of = {bid_id: bid["seq"] for bid_id, bid in by_id.items()}
+    others = records(
+        run,
+        """
+        SELECT b.seq, b.retry_of, b.amount, b.http_status, b.error_code, b.bid_id,
+            s.change_amount AS changed, b.sent_us - ? AS sent, b.replied_us - ? AS replied
+        FROM bids b JOIN schedule s USING (seq) ORDER BY b.sent_us, b.seq
+        """,
+        t0,
+        t0,
+    )
+    others = [send for send in others if send["seq"] not in first_seqs]
+    for send in others:
+        send["bid"] = seq_of.get(send.pop("bid_id"))
+    # What the fake itself says became of its holds.
+    ended = [intent["status"] for intent in run.audit["intents"]]
+    fake = {
+        "placed": len(ended),
+        "released": ended.count("canceled"),
+        "captured": ended.count("succeeded"),
+        "held": ended.count("requires_capture"),
+    }
 
     return {
         "run": {
@@ -143,6 +154,8 @@ def storm(run: Run, results: list[tuple[str, list[str]]]) -> dict:
             "duration_us": manifest["schedule"]["duration_us"],
             "auction_seconds": manifest["settings"]["auction_seconds"],
             "bidders": manifest["schedule"]["bidders"],
+            "retry_rate": manifest["schedule"]["retry_rate"],
+            "conflict_rate": manifest["schedule"]["conflict_rate"],
             "subscribers": subscribers,
             "cpus": manifest["machine"]["cpus"],
             "send_lag_max_us": manifest["results"]["send_lag_max_us"],
@@ -152,6 +165,7 @@ def storm(run: Run, results: list[tuple[str, list[str]]]) -> dict:
         "checks": [{"name": name, "passed": not problems} for name, problems in results],
         "bids": bids,
         "other_sends": others,
+        "fake": fake,
         "close": close,
     }
 

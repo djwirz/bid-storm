@@ -52,7 +52,7 @@ Version one ends at 2d. 2a is a fair stopping point.
 
 Checked in 2a: Cloudflare's free limit is 25 MiB per file and the DuckDB-WASM binary was over 30 MiB, so the first views read prepared JSON and in-browser queries wait until a view needs them (ADR 0009).
 
-2a's page shows the rule checks, price staircase, race lanes and stream agreement. The hold ledger goes with the fault view in 2c. 2b adds the latency heatmap and per-bid waterfall to the same page.
+2a's page shows the rule checks, price staircase, race lanes and stream agreement. The hold ledger goes with the fault view in 2c. 2b adds the latency heatmap and per-bid waterfall to the same page. 2c adds a story for each injected fault and the hold ledger. A provider error injected after a hold has no story: the fake recovers by itself, so from outside it looks like success. Instance failures, stream drops and permanent release or capture failures are not injected.
 
 ## 8. Later, not designed here
 - **A Stripe fake and a deployed target.** First measure whether the current fake limits throughput. The better case for a new one is fidelity: speaking Stripe's API would load the target's real adapter. Keep it private, set a budget alarm, check host terms.
