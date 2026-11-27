@@ -12,7 +12,7 @@ Design accepted (PR #1). Version one is built (slices 1a to 2d): `make storm` re
 - ADRs are written as `Accepted` in the PR that adds them; merging is the acceptance. Never rewrite a merged ADR's decision: add a new ADR that supersedes it.
 - When the spec and the code disagree, stop and ask; update the spec in the same PR if the decision changes.
 - Go is newer ground: explain the Go idea behind each new piece briefly in the PR description.
-- Built with Claude Code in the open: the case study gets a section on how AI was used and where it was wrong, so note real mistakes in PR descriptions.
+- Built with Claude Code. The case study says so once, briefly, under "How it was built"; mistakes go under "What went wrong" without attributing them to the AI. Note real mistakes in PR descriptions.
 
 ## Constraints
 - Go stays small (generator and proxy). Python where it fits. TypeScript for the site only.
